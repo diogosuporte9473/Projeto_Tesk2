@@ -335,7 +335,7 @@ export type InsertChecklistTemplate = typeof checklistTemplates.$inferInsert;
 export const appSettings = pgTable("app_settings", {
   id: serial("id").primaryKey(),
   domain: text("domain").unique().notNull(), // Domínio (ex: empresaA.com ou localhost)
-  appName: text("app_name").default("Maju Tasks").notNull(),
+  appName: text("app_name").default("DStasks").notNull(),
   appLogoUrl: text("app_logo_url"),
   primaryColor: text("primary_color").default("#4b4897"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),

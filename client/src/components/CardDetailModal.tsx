@@ -619,7 +619,7 @@ export default function CardDetailModal({
       <DialogContent 
         showCloseButton={false}
         className={cn(
-          "overflow-y-auto bg-[#1a1a1a] text-white border-[#333] p-0 transition-all duration-500 ease-in-out flex flex-col",
+          "overflow-y-auto bg-[var(--surface-1)] text-white border-[var(--surface-border)] p-0 transition-all duration-500 ease-in-out flex flex-col",
           isMaximized 
             ? "max-w-[95vw] w-[min(1400px,95vw)] min-w-[1000px] h-[94vh] rounded-2xl shadow-2xl" 
             : "max-w-[1100px] w-[min(1100px,92vw)] min-w-[850px] h-[88vh] rounded-xl shadow-xl"
@@ -631,7 +631,7 @@ export default function CardDetailModal({
         </div>
 
         {/* Header */}
-        <DialogHeader className="p-3 px-5 border-b border-[#333]/60 bg-[#1e1e1e] flex-shrink-0">
+        <DialogHeader className="p-3 px-5 border-b border-[var(--surface-border)]/60 bg-[var(--surface-3)] flex-shrink-0">
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1 min-w-0">
               {isEditingTitle ? (
@@ -640,7 +640,7 @@ export default function CardDetailModal({
                     type="text"
                     value={editedTitle}
                     onChange={(e) => setEditedTitle(e.target.value)}
-                    className="text-xl font-bold bg-[#2a2a2a] border-b-2 border-accent outline-none text-white w-full px-2 py-1 rounded shadow-inner"
+                    className="text-xl font-bold bg-[var(--surface-2)] border-b-2 border-accent outline-none text-white w-full px-2 py-1 rounded shadow-inner"
                     autoFocus
                     onBlur={handleUpdateTitle}
                     onKeyDown={(e) => e.key === "Enter" && handleUpdateTitle()}
@@ -667,7 +667,7 @@ export default function CardDetailModal({
                   {/* Seção de Responsável do Card */}
                 <div className="flex items-center gap-2.5 mt-1.5">
                   <div className="flex -space-x-2">
-                    <Avatar className="h-7 w-7 border-2 border-[#1e1e1e] ring-1 ring-white/5">
+                    <Avatar className="h-7 w-7 border-2 border-[var(--surface-3)] ring-1 ring-white/5">
                       <AvatarFallback className="bg-accent/10 text-accent text-xs font-black">
                         {card?.assignedToName ? card.assignedToName.charAt(0).toUpperCase() : <UserIcon size={14} />}
                       </AvatarFallback>
@@ -682,7 +682,7 @@ export default function CardDetailModal({
                           <Plus size={12} className="opacity-50 group-hover:opacity-100" />
                         </button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-64 bg-[#1a1a1a] border-[#333] p-0 shadow-2xl overflow-hidden" align="start">
+                      <PopoverContent className="w-64 bg-[var(--surface-1)] border-[var(--surface-border)] p-0 shadow-2xl overflow-hidden" align="start">
                         <Command className="bg-transparent">
                           <CommandInput placeholder="Buscar usuário..." className="border-none focus:ring-0 text-xs" />
                           <CommandList className="max-h-[200px] custom-scrollbar">
@@ -788,7 +788,7 @@ export default function CardDetailModal({
                       <MoreHorizontal size={18} />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-56 bg-[#1a1a1a] border-[#333]">
+                  <DropdownMenuContent align="end" className="w-56 bg-[var(--surface-1)] border-[var(--surface-border)]">
                     <DropdownMenuItem onClick={handleCloneCard} className="flex items-center gap-2.5 p-2.5 hover:bg-white/5 cursor-pointer text-xs font-bold text-gray-200">
                       <Copy size={14} className="text-blue-400" /> Clonar Cartão
                     </DropdownMenuItem>
@@ -798,7 +798,7 @@ export default function CardDetailModal({
                         <MoveHorizontal size={14} className="text-amber-400" /> Mover para outro quadro
                       </DropdownMenuSubTrigger>
                       <DropdownMenuPortal>
-                        <DropdownMenuSubContent className="w-64 bg-[#1a1a1a] border-[#333] p-1.5 shadow-2xl">
+                        <DropdownMenuSubContent className="w-64 bg-[var(--surface-1)] border-[var(--surface-border)] p-1.5 shadow-2xl">
                           {userBoards?.map((b: any) => {
                             const isCurrentBoard = b.id === boardId;
                             return (
@@ -813,8 +813,8 @@ export default function CardDetailModal({
                                   {isCurrentBoard && <Check size={12} className="ml-auto" />}
                                 </DropdownMenuSubTrigger>
                                 <DropdownMenuPortal>
-                                  <DropdownMenuSubContent className="w-56 bg-[#1e1e1e] border-[#333] p-1.5 shadow-2xl ml-1">
-                                    <div className="px-2 py-1.5 mb-1 border-b border-[#333]">
+                                  <DropdownMenuSubContent className="w-56 bg-[var(--surface-3)] border-[var(--surface-border)] p-1.5 shadow-2xl ml-1">
+                                    <div className="px-2 py-1.5 mb-1 border-b border-[var(--surface-border)]">
                                       <span className="text-[9px] font-black text-gray-500 uppercase tracking-[0.2em]">Listas de Destino</span>
                                     </div>
                                     {b.lists && b.lists.length > 0 ? (
@@ -842,7 +842,7 @@ export default function CardDetailModal({
                       </DropdownMenuPortal>
                     </DropdownMenuSub>
 
-                    <DropdownMenuSeparator className="bg-[#333]" />
+                    <DropdownMenuSeparator className="bg-[var(--surface-border)]" />
                     
                     <DropdownMenuItem onClick={handleArchiveCard} className="flex items-center gap-2.5 p-2.5 hover:bg-white/5 cursor-pointer text-xs font-bold text-amber-400">
                       <Archive size={14} /> Arquivar Cartão
@@ -905,7 +905,7 @@ export default function CardDetailModal({
             )}>
               
               {/* Quick Actions & Labels */}
-              <div className="flex flex-col md:flex-row justify-between items-start gap-4 pb-5 border-b border-[#333]/40">
+              <div className="flex flex-col md:flex-row justify-between items-start gap-4 pb-5 border-b border-[var(--surface-border)]/40">
                 <div className="flex flex-wrap gap-4">
                   <div className="space-y-4">
                     <h4 className="text-[11px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
@@ -934,11 +934,11 @@ export default function CardDetailModal({
                   <div className="flex flex-wrap gap-3">
                     <Popover>
                       <PopoverTrigger asChild>
-                        <Button variant="outline" size="sm" className="bg-[#2a2a2a] border border-[#333] hover:bg-[#333] text-xs h-10 px-5 font-bold rounded-xl transition-all">
+                        <Button variant="outline" size="sm" className="bg-[var(--surface-2)] border border-[var(--surface-border)] hover:bg-[var(--surface-border)] text-xs h-10 px-5 font-bold rounded-xl transition-all">
                           <Tag className="w-4 h-4 mr-2.5 text-purple-400" /> Etiquetas
                         </Button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-64 bg-[#1a1a1a] border-[#333] p-4 shadow-2xl">
+                      <PopoverContent className="w-64 bg-[var(--surface-1)] border-[var(--surface-border)] p-4 shadow-2xl">
                         <div className="space-y-4">
                           <h3 className="text-sm font-bold text-gray-200">Gerenciar Etiquetas</h3>
                           <div className="flex flex-wrap gap-2">
@@ -955,14 +955,14 @@ export default function CardDetailModal({
                               </div>
                             ))}
                           </div>
-                          <Separator className="bg-[#333]" />
+                          <Separator className="bg-[var(--surface-border)]" />
                           <div className="space-y-3">
                             <input
                               type="text"
                               value={newLabel}
                               onChange={(e) => setNewLabel(e.target.value)}
                               placeholder="Nome da etiqueta..."
-                              className="w-full bg-[#2a2a2a] border border-[#333] rounded px-3 py-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-accent"
+                              className="w-full bg-[var(--surface-2)] border border-[var(--surface-border)] rounded px-3 py-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-accent"
                             />
                             <div className="flex items-center justify-between gap-3">
                               <input
@@ -971,7 +971,7 @@ export default function CardDetailModal({
                                 onChange={(e) => setNewLabelColor(e.target.value)}
                                 className="w-10 h-10 rounded-lg bg-transparent border-none cursor-pointer p-0"
                               />
-                              <Button onClick={handleAddLabel} size="sm" className="bg-accent text-white h-9 px-4 text-xs font-bold">
+                              <Button onClick={handleAddLabel} size="sm" className="bg-accent text-accent-foreground h-9 px-4 text-xs font-bold">
                                 Adicionar
                               </Button>
                             </div>
@@ -982,11 +982,11 @@ export default function CardDetailModal({
 
                     <Popover open={isCreatingChecklist} onOpenChange={setIsCreatingChecklist}>
                       <PopoverTrigger asChild>
-                        <Button variant="outline" size="sm" className="bg-[#2a2a2a] border border-[#333] hover:bg-[#333] text-xs h-10 px-5 font-bold rounded-xl transition-all">
+                        <Button variant="outline" size="sm" className="bg-[var(--surface-2)] border border-[var(--surface-border)] hover:bg-[var(--surface-border)] text-xs h-10 px-5 font-bold rounded-xl transition-all">
                           <CheckSquare className="w-4 h-4 mr-2.5 text-accent" /> Checklist
                         </Button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-80 bg-[#1a1a1a] border-[#333] p-5 shadow-2xl animate-in fade-in zoom-in duration-200">
+                      <PopoverContent className="w-80 bg-[var(--surface-1)] border-[var(--surface-border)] p-5 shadow-2xl animate-in fade-in zoom-in duration-200">
                         <div className="space-y-5">
                           <div className="flex items-center justify-between">
                             <h3 className="text-sm font-bold text-gray-200">Novo Checklist</h3>
@@ -1003,7 +1003,7 @@ export default function CardDetailModal({
                               value={newChecklistGroupTitle}
                               onChange={(e) => setNewChecklistGroupTitle(e.target.value)}
                               placeholder="Ex: Tarefas Iniciais"
-                              className="w-full bg-[#2a2a2a] border border-[#333] rounded-lg px-3.5 py-2.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-accent transition-all"
+                              className="w-full bg-[var(--surface-2)] border border-[var(--surface-border)] rounded-lg px-3.5 py-2.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-accent transition-all"
                               onKeyDown={(e) => e.key === "Enter" && handleAddChecklistGroup()}
                             />
                           </div>
@@ -1018,10 +1018,10 @@ export default function CardDetailModal({
                                 if (template) setNewChecklistGroupTitle(template.name);
                               }}
                             >
-                              <SelectTrigger className="bg-[#2a2a2a] border-[#333] h-10 rounded-lg text-xs text-gray-300">
+                              <SelectTrigger className="bg-[var(--surface-2)] border-[var(--surface-border)] h-10 rounded-lg text-xs text-gray-300">
                                 <SelectValue placeholder="Selecione um modelo..." />
                               </SelectTrigger>
-                              <SelectContent className="bg-[#1a1a1a] border-[#333] text-white">
+                              <SelectContent className="bg-[var(--surface-1)] border-[var(--surface-border)] text-white">
                                 {(templates as any)?.map((t: any) => (
                                   <SelectItem key={t.id} value={t.id.toString()} className="text-xs">
                                     <div className="flex items-center gap-2">
@@ -1038,7 +1038,7 @@ export default function CardDetailModal({
                             <Button 
                               onClick={handleAddChecklistGroup} 
                               size="sm" 
-                              className="flex-1 bg-accent text-white h-10 text-xs font-bold rounded-lg shadow-lg shadow-accent/20"
+                              className="flex-1 bg-accent text-accent-foreground h-10 text-xs font-bold rounded-lg shadow-lg shadow-accent/20"
                               disabled={addChecklistGroupMutation.isPending}
                             >
                               {addChecklistGroupMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
@@ -1059,11 +1059,11 @@ export default function CardDetailModal({
 
                     <Popover>
                       <PopoverTrigger asChild>
-                        <Button variant="outline" size="sm" className="bg-[#2a2a2a] border border-[#333] hover:bg-[#333] text-xs h-10 px-5 font-bold rounded-xl transition-all">
+                        <Button variant="outline" size="sm" className="bg-[var(--surface-2)] border border-[var(--surface-border)] hover:bg-[var(--surface-border)] text-xs h-10 px-5 font-bold rounded-xl transition-all">
                           <Clock className="w-4 h-4 mr-2.5 text-blue-400" /> Datas
                         </Button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-80 p-0 bg-[#1a1a1a] border-[#333] shadow-2xl overflow-hidden rounded-xl">
+                      <PopoverContent className="w-80 p-0 bg-[var(--surface-1)] border-[var(--surface-border)] shadow-2xl overflow-hidden rounded-xl">
                         <div className="p-5 space-y-5">
                           <h3 className="text-sm font-bold text-gray-200">Gerenciar Prazos</h3>
                           
@@ -1071,7 +1071,7 @@ export default function CardDetailModal({
                             <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Data de Início</label>
                             <input 
                               type="date" 
-                              className="bg-[#2a2a2a] border border-[#333] rounded-lg px-3.5 py-2.5 text-sm text-white w-full focus:ring-1 focus:ring-accent outline-none transition-all"
+                              className="bg-[var(--surface-2)] border border-[var(--surface-border)] rounded-lg px-3.5 py-2.5 text-sm text-white w-full focus:ring-1 focus:ring-accent outline-none transition-all"
                               onChange={(e) => handleUpdateStartDate(e.target.value ? new Date(e.target.value) : null)}
                               value={(() => {
                                 const dateValue = card?.startDate || card?.start_date || projectDates?.projectStartDate || projectDates?.start_date;
@@ -1089,7 +1089,7 @@ export default function CardDetailModal({
                             <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Data de Entrega</label>
                             <input 
                               type="date" 
-                              className="bg-[#2a2a2a] border border-[#333] rounded-lg px-3.5 py-2.5 text-sm text-white w-full focus:ring-1 focus:ring-accent outline-none transition-all"
+                              className="bg-[var(--surface-2)] border border-[var(--surface-border)] rounded-lg px-3.5 py-2.5 text-sm text-white w-full focus:ring-1 focus:ring-accent outline-none transition-all"
                               onChange={(e) => handleUpdateDueDate(e.target.value ? new Date(e.target.value) : null)}
                               value={(() => {
                                 const dateValue = card?.dueDate || card?.due_date || projectDates?.projectEndDate || projectDates?.end_date;
@@ -1125,7 +1125,7 @@ export default function CardDetailModal({
                     <Button 
                       variant="outline" 
                       size="sm" 
-                      className="bg-[#2a2a2a] border border-[#333] hover:bg-[#333] text-xs h-10 px-5 font-bold rounded-xl transition-all"
+                      className="bg-[var(--surface-2)] border border-[var(--surface-border)] hover:bg-[var(--surface-border)] text-xs h-10 px-5 font-bold rounded-xl transition-all"
                       onClick={() => fileInputRef.current?.click()}
                     >
                       <Paperclip className="w-4 h-4 mr-2.5 text-amber-400" /> Anexar
@@ -1154,7 +1154,7 @@ export default function CardDetailModal({
                     onChange={(e) => setDescription(e.target.value)} 
                     onBlur={handleUpdateDescription} 
                     placeholder="Adicione uma descrição detalhada sobre esta tarefa..." 
-                    className="w-full min-h-[160px] bg-[#222]/50 border border-[#333] rounded-2xl p-6 text-sm leading-relaxed text-gray-300 resize-y focus:border-accent/40 focus:ring-1 focus:ring-accent/20 transition-all outline-none shadow-inner" 
+                    className="w-full min-h-[160px] bg-[var(--surface-3)]/50 border border-[var(--surface-border)] rounded-2xl p-6 text-sm leading-relaxed text-gray-300 resize-y focus:border-accent/40 focus:ring-1 focus:ring-accent/20 transition-all outline-none shadow-inner" 
                   />
                 </div>
               </section>
@@ -1180,10 +1180,10 @@ export default function CardDetailModal({
                       value={getCustomFieldValue("Mapa de Calor")}
                       onValueChange={(val) => handleUpsertCustomField("Mapa de Calor", val)}
                     >
-                      <SelectTrigger className="bg-[#222] border-[#333] h-11 rounded-xl text-xs font-bold text-gray-300 hover:bg-[#2a2a2a] transition-all hover:border-gray-600">
+                      <SelectTrigger className="bg-[var(--surface-3)] border-[var(--surface-border)] h-11 rounded-xl text-xs font-bold text-gray-300 hover:bg-[var(--surface-2)] transition-all hover:border-[var(--surface-border)]">
                         <SelectValue placeholder="Selecione..." />
                       </SelectTrigger>
-                      <SelectContent className="bg-[#1a1a1a] border-[#333] text-white">
+                      <SelectContent className="bg-[var(--surface-1)] border-[var(--surface-border)] text-white">
                         <SelectItem value="Baixo">Baixo</SelectItem>
                         <SelectItem value="Médio">Médio</SelectItem>
                         <SelectItem value="Alto">Alto</SelectItem>
@@ -1201,10 +1201,10 @@ export default function CardDetailModal({
                       value={getCustomFieldValue("Status")}
                       onValueChange={(val) => handleUpsertCustomField("Status", val)}
                     >
-                      <SelectTrigger className="bg-[#222] border-[#333] h-11 rounded-xl text-xs font-bold text-gray-300 hover:bg-[#2a2a2a] transition-all hover:border-gray-600">
+                      <SelectTrigger className="bg-[var(--surface-3)] border-[var(--surface-border)] h-11 rounded-xl text-xs font-bold text-gray-300 hover:bg-[var(--surface-2)] transition-all hover:border-[var(--surface-border)]">
                         <SelectValue placeholder="Selecione..." />
                       </SelectTrigger>
-                      <SelectContent className="bg-[#1a1a1a] border-[#333] text-white">
+                      <SelectContent className="bg-[var(--surface-1)] border-[var(--surface-border)] text-white">
                         <SelectItem value="Pendente">Pendente</SelectItem>
                         <SelectItem value="Em Andamento">Em Andamento</SelectItem>
                         <SelectItem value="Concluído">Concluído</SelectItem>
@@ -1222,10 +1222,10 @@ export default function CardDetailModal({
                       value={getCustomFieldValue("Classificação")}
                       onValueChange={(val) => handleUpsertCustomField("Classificação", val)}
                     >
-                      <SelectTrigger className="bg-[#222] border-[#333] h-11 rounded-xl text-xs font-bold text-gray-300 hover:bg-[#2a2a2a] transition-all hover:border-gray-600">
+                      <SelectTrigger className="bg-[var(--surface-3)] border-[var(--surface-border)] h-11 rounded-xl text-xs font-bold text-gray-300 hover:bg-[var(--surface-2)] transition-all hover:border-[var(--surface-border)]">
                         <SelectValue placeholder="Selecione..." />
                       </SelectTrigger>
-                      <SelectContent className="bg-[#1a1a1a] border-[#333] text-white">
+                      <SelectContent className="bg-[var(--surface-1)] border-[var(--surface-border)] text-white">
                         <SelectItem value="Bronze">Bronze</SelectItem>
                         <SelectItem value="Prata">Prata</SelectItem>
                         <SelectItem value="Ouro">Ouro</SelectItem>
@@ -1240,7 +1240,7 @@ export default function CardDetailModal({
                         <div className="w-1.5 h-1.5 rounded-full bg-purple-400 shadow-[0_0_8px_rgba(192,132,252,0.6)] animate-pulse" />
                         <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Origem</label>
                       </div>
-                      <div className="h-11 rounded-xl bg-[#222] border border-[#333] flex items-center px-4 text-xs text-gray-400 font-bold">
+                      <div className="h-11 rounded-xl bg-[var(--surface-3)] border border-[var(--surface-border)] flex items-center px-4 text-xs text-gray-400 font-bold">
                         {listName || "N/A"}
                       </div>
                     </div>
@@ -1274,7 +1274,7 @@ export default function CardDetailModal({
                                 defaultValue={group.title}
                                 onBlur={(e) => handleUpdateChecklistGroup(group.id, e.target.value)}
                                 onKeyDown={(e) => e.key === "Enter" && handleUpdateChecklistGroup(group.id, (e.target as HTMLInputElement).value)}
-                                className="bg-[#2a2a2a] border border-accent/40 rounded-xl px-4 py-2 text-xl font-bold text-gray-200 outline-none w-full max-w-2xl focus:ring-2 focus:ring-accent/20"
+                                className="bg-[var(--surface-2)] border border-accent/40 rounded-xl px-4 py-2 text-xl font-bold text-gray-200 outline-none w-full max-w-2xl focus:ring-2 focus:ring-accent/20"
                               />
                             ) : (
                               <h3 
@@ -1321,7 +1321,7 @@ export default function CardDetailModal({
                                   <Copy className="w-4 h-4" />
                                 </Button>
                               </PopoverTrigger>
-                              <PopoverContent className="w-72 bg-[#1a1a1a] border-[#333] p-4 shadow-2xl rounded-xl">
+                              <PopoverContent className="w-72 bg-[var(--surface-1)] border-[var(--surface-border)] p-4 shadow-2xl rounded-xl">
                                 <div className="space-y-4">
                                   <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Nome do Novo Modelo</p>
                                   <input
@@ -1329,7 +1329,7 @@ export default function CardDetailModal({
                                     value={templateName}
                                     onChange={(e) => setTemplateName(e.target.value)}
                                     placeholder="Ex: Padrão de Entrega..."
-                                    className="w-full bg-[#222] border border-[#333] rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-accent transition-all"
+                                    className="w-full bg-[var(--surface-3)] border border-[var(--surface-border)] rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-accent transition-all"
                                     autoFocus
                                   />
                                   <div className="flex justify-end gap-2">
@@ -1363,7 +1363,7 @@ export default function CardDetailModal({
                           "space-y-6 transition-all duration-500"
                         )}>
                           <div className="flex items-center gap-5">
-                            <Progress value={groupProgress} className="h-2 bg-[#222] rounded-full flex-1" />
+                            <Progress value={groupProgress} className="h-2 bg-[var(--surface-3)] rounded-full flex-1" />
                             <span className="text-[11px] font-bold text-gray-500 tabular-nums w-8">{Math.round(groupProgress)}%</span>
                           </div>
                           
@@ -1379,7 +1379,7 @@ export default function CardDetailModal({
                                 <div 
                                   key={item.id} 
                                   className={cn(
-                                    "group flex items-start gap-5 rounded-2xl transition-all border border-transparent hover:border-[#333]/60 hover:bg-white/[0.03] shadow-sm",
+                                    "group flex items-start gap-5 rounded-2xl transition-all border border-transparent hover:border-[var(--surface-border)]/60 hover:bg-white/[0.03] shadow-sm",
                                     isMaximized ? "p-5" : "p-4"
                                   )}
                                 >
@@ -1388,7 +1388,7 @@ export default function CardDetailModal({
                                       type="checkbox"
                                       checked={item.completed}
                                       onChange={() => handleUpdateChecklistItem(item.id, { completed: !item.completed })}
-                                      className="w-5 h-5 rounded border-[#444] bg-[#1a1a1a] text-accent focus:ring-0 cursor-pointer transition-transform active:scale-90"
+                                      className="w-5 h-5 rounded border-[var(--surface-border)] bg-[var(--surface-1)] text-accent focus:ring-0 cursor-pointer transition-transform active:scale-90"
                                     />
                                   </div>
                                   <div className="flex-1 min-w-0 flex flex-col gap-3">
@@ -1410,10 +1410,10 @@ export default function CardDetailModal({
                                       <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
                                         <Popover>
                                           <PopoverTrigger asChild>
-                                            <button className="p-2 rounded-xl hover:bg-white/10 text-gray-500 transition-all border border-transparent hover:border-[#333]" title="Atribuir responsável">
+                                            <button className="p-2 rounded-xl hover:bg-white/10 text-gray-500 transition-all border border-transparent hover:border-[var(--surface-border)]" title="Atribuir responsável">
                                               {assignedUser ? (
                                                 <Avatar className="w-7 h-7 ring-2 ring-accent/20">
-                                                  <AvatarFallback className="bg-accent text-[10px] text-white font-black">
+                                                  <AvatarFallback className="bg-accent text-[10px] text-accent-foreground font-black">
                                                     {assignedUser.name?.charAt(0).toUpperCase()}
                                                   </AvatarFallback>
                                                 </Avatar>
@@ -1422,7 +1422,7 @@ export default function CardDetailModal({
                                               )}
                                             </button>
                                           </PopoverTrigger>
-                                          <PopoverContent className="w-72 bg-[#1a1a1a] border-[#333] p-0 shadow-2xl rounded-xl overflow-hidden" align="end">
+                                          <PopoverContent className="w-72 bg-[var(--surface-1)] border-[var(--surface-border)] p-0 shadow-2xl rounded-xl overflow-hidden" align="end">
                                             <Command className="bg-transparent">
                                               <CommandInput placeholder="Buscar usuário..." className="border-none focus:ring-0 text-xs" />
                                               <CommandList className="max-h-[200px] custom-scrollbar">
@@ -1467,18 +1467,18 @@ export default function CardDetailModal({
                                         <Popover>
                                           <PopoverTrigger asChild>
                                             <button className={cn(
-                                              "p-2 rounded-xl hover:bg-white/10 transition-all border border-transparent hover:border-[#333]",
+                                              "p-2 rounded-xl hover:bg-white/10 transition-all border border-transparent hover:border-[var(--surface-border)]",
                                               item.due_date ? "text-accent" : "text-gray-500"
                                             )} title="Definir prazo do item">
                                               <CalendarDays className="w-4.5 h-4.5" />
                                             </button>
                                           </PopoverTrigger>
-                                          <PopoverContent className="w-auto p-0 bg-[#1a1a1a] border-[#333] shadow-2xl rounded-xl overflow-hidden" align="end">
+                                          <PopoverContent className="w-auto p-0 bg-[var(--surface-1)] border-[var(--surface-border)] shadow-2xl rounded-xl overflow-hidden" align="end">
                                             <div className="p-4 space-y-4">
                                               <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Prazo da Subtarefa</p>
                                               <input
                                                 type="date"
-                                                className="bg-[#2a2a2a] border border-[#333] rounded-lg px-3.5 py-2 text-xs text-white outline-none focus:ring-2 focus:ring-accent/30 transition-all"
+                                                className="bg-[var(--surface-2)] border border-[var(--surface-border)] rounded-lg px-3.5 py-2 text-xs text-white outline-none focus:ring-2 focus:ring-accent/30 transition-all"
                                                 onChange={(e) => handleUpdateChecklistItem(item.id, { dueDate: e.target.value ? new Date(e.target.value) : null })}
                                                 value={item.due_date ? new Date(item.due_date).toISOString().split('T')[0] : ''}
                                               />
@@ -1496,11 +1496,11 @@ export default function CardDetailModal({
 
                                         <DropdownMenu>
                                           <DropdownMenuTrigger asChild>
-                                            <button className="p-2 rounded-xl hover:bg-white/10 transition-all border border-transparent hover:border-[#333]">
+                                            <button className="p-2 rounded-xl hover:bg-white/10 transition-all border border-transparent hover:border-[var(--surface-border)]">
                                               <MoreVertical className="w-4.5 h-4.5 text-gray-500" />
                                             </button>
                                           </DropdownMenuTrigger>
-                                          <DropdownMenuContent className="bg-[#1a1a1a] border-[#333] text-white shadow-2xl rounded-xl min-w-[160px]">
+                                          <DropdownMenuContent className="bg-[var(--surface-1)] border-[var(--surface-border)] text-white shadow-2xl rounded-xl min-w-[160px]">
                                             <DropdownMenuItem 
                                               onClick={() => handleRemoveChecklist(item.id)} 
                                               className="text-red-400 focus:text-red-400 focus:bg-red-400/10 cursor-pointer text-xs font-bold p-3 rounded-lg"
@@ -1525,9 +1525,9 @@ export default function CardDetailModal({
                                         </div>
                                       )}
                                       {assignedUser && (
-                                        <div className="flex items-center gap-2 bg-[#2a2a2a] px-3 py-1 rounded-md border border-[#333] shadow-sm">
+                                        <div className="flex items-center gap-2 bg-[var(--surface-2)] px-3 py-1 rounded-md border border-[var(--surface-border)] shadow-sm">
                                           <Avatar className="w-4 h-4 ring-1 ring-white/10">
-                                            <AvatarFallback className="bg-accent text-[7px] text-white font-black">
+                                            <AvatarFallback className="bg-accent text-[7px] text-accent-foreground font-black">
                                               {assignedUser.name?.charAt(0).toUpperCase()}
                                             </AvatarFallback>
                                           </Avatar>
@@ -1547,7 +1547,7 @@ export default function CardDetailModal({
                                   value={newChecklistItems[group.id] || ""}
                                   onChange={(e) => setNewChecklistItems(prev => ({ ...prev, [group.id]: e.target.value }))}
                                   placeholder="Escreva uma nova subtarefa..."
-                                  className="w-full bg-[#222]/50 hover:bg-[#2a2a2a]/60 border border-transparent focus:border-accent/40 rounded-2xl px-6 py-4 text-sm text-gray-300 outline-none transition-all shadow-inner pr-28"
+                                  className="w-full bg-[var(--surface-3)]/50 hover:bg-[var(--surface-2)]/60 border border-transparent focus:border-accent/40 rounded-2xl px-6 py-4 text-sm text-gray-300 outline-none transition-all shadow-inner pr-28"
                                   onKeyDown={(e) => e.key === "Enter" && handleAddChecklistItem(group.id)}
                                 />
                                 {newChecklistItems[group.id] && (
@@ -1592,10 +1592,10 @@ export default function CardDetailModal({
                             href={file.file_url} 
                             target="_blank" 
                             rel="noreferrer"
-                            className="flex flex-col overflow-hidden rounded-2xl bg-[#222]/50 hover:bg-[#2a2a2a]/80 transition-all border border-[#333] group hover:border-accent/40 shadow-sm h-full"
+                            className="flex flex-col overflow-hidden rounded-2xl bg-[var(--surface-3)]/50 hover:bg-[var(--surface-2)]/80 transition-all border border-[var(--surface-border)] group hover:border-accent/40 shadow-sm h-full"
                           >
                             {/* Thumbnail Area */}
-                            <div className="aspect-video w-full bg-[#1a1a1a] flex items-center justify-center overflow-hidden border-b border-[#333]">
+                            <div className="aspect-video w-full bg-[var(--surface-1)] flex items-center justify-center overflow-hidden border-b border-[var(--surface-border)]">
                               {isImage ? (
                                 <img 
                                   src={file.file_url} 
@@ -1614,7 +1614,7 @@ export default function CardDetailModal({
 
                             {/* Info Area */}
                             <div className="p-4 flex items-center gap-4">
-                              <div className="w-10 h-10 rounded-xl bg-[#1a1a1a] flex items-center justify-center flex-shrink-0 group-hover:bg-accent/10 transition-colors border border-[#333] group-hover:border-accent/20">
+                              <div className="w-10 h-10 rounded-xl bg-[var(--surface-1)] flex items-center justify-center flex-shrink-0 group-hover:bg-accent/10 transition-colors border border-[var(--surface-border)] group-hover:border-accent/20">
                                 {isImage ? (
                                   <ImageIcon className="w-4 h-4 text-gray-500 group-hover:text-accent" />
                                 ) : (
@@ -1655,7 +1655,7 @@ export default function CardDetailModal({
               )}
 
               {/* Comments Section */}
-              <section className="space-y-8 pt-8 border-t border-[#333]/40">
+              <section className="space-y-8 pt-8 border-t border-[var(--surface-border)]/40">
                 <div className="flex items-center gap-4">
                   <div className="p-2.5 rounded-xl bg-white/5 border border-white/5 shadow-inner">
                     <MessageSquare className="w-5 h-5 text-gray-400" />
@@ -1666,7 +1666,7 @@ export default function CardDetailModal({
                 <div className={cn("transition-all duration-500 space-y-8", isMaximized ? "pl-10" : "pl-10")}>
                   <div className="flex gap-6">
                     <Avatar className="w-12 h-12 flex-shrink-0 border-2 border-accent/20 shadow-lg shadow-accent/5">
-                      <AvatarFallback className="bg-accent text-white text-sm font-black uppercase">
+                      <AvatarFallback className="bg-accent text-accent-foreground text-sm font-black uppercase">
                         {currentUser?.name?.charAt(0).toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
@@ -1675,7 +1675,7 @@ export default function CardDetailModal({
                         value={newComment}
                         onChange={(e) => setNewComment(e.target.value)}
                         placeholder="Escreva um comentário ou anote algo importante..."
-                        className="w-full bg-[#222]/50 border border-[#333] rounded-2xl p-6 text-sm leading-relaxed text-gray-300 focus:border-accent/40 focus:ring-1 focus:ring-accent/20 transition-all outline-none resize-none min-h-[120px] shadow-inner"
+                        className="w-full bg-[var(--surface-3)]/50 border border-[var(--surface-border)] rounded-2xl p-6 text-sm leading-relaxed text-gray-300 focus:border-accent/40 focus:ring-1 focus:ring-accent/20 transition-all outline-none resize-none min-h-[120px] shadow-inner"
                       />
                       <div className="flex justify-end">
                         <Button 
@@ -1693,19 +1693,19 @@ export default function CardDetailModal({
                   <div className="space-y-6">
                     {comments?.map((comment: any) => (
                       <div key={comment.id} className="flex gap-6 group">
-                        <Avatar className="w-12 h-12 flex-shrink-0 border-2 border-[#333] shadow-md transition-transform group-hover:scale-105">
-                          <AvatarFallback className="bg-[#2a2a2a] text-gray-400 text-sm font-black uppercase">
+                        <Avatar className="w-12 h-12 flex-shrink-0 border-2 border-[var(--surface-border)] shadow-md transition-transform group-hover:scale-105">
+                          <AvatarFallback className="bg-[var(--surface-2)] text-gray-400 text-sm font-black uppercase">
                             {comment.userName?.charAt(0).toUpperCase()}
                           </AvatarFallback>
                         </Avatar>
                         <div className="flex-1 space-y-3.5 min-w-0">
                           <div className="flex items-center gap-4">
                             <span className="text-sm font-black text-gray-200">{comment.userName}</span>
-                            <span className="text-[10px] text-gray-500 font-bold bg-[#222] px-3 py-1 rounded-md border border-[#333]/50">
+                            <span className="text-[10px] text-gray-500 font-bold bg-[var(--surface-3)] px-3 py-1 rounded-md border border-[var(--surface-border)]/50">
                               {format(new Date(comment.created_at), "dd 'de' MMM, HH:mm", { locale: ptBR })}
                             </span>
                           </div>
-                          <div className="bg-[#222]/80 p-6 rounded-3xl rounded-tl-none text-sm text-gray-300 border border-[#333]/40 shadow-sm leading-relaxed break-words relative ring-1 ring-white/5">
+                          <div className="bg-[var(--surface-3)]/80 p-6 rounded-3xl rounded-tl-none text-sm text-gray-300 border border-[var(--surface-border)]/40 shadow-sm leading-relaxed break-words relative ring-1 ring-white/5">
                             {comment.content}
                           </div>
                           {(comment.user_id === currentUser?.id || currentUser?.role === 'admin') && (
@@ -1729,7 +1729,7 @@ export default function CardDetailModal({
               "space-y-6 transition-all duration-500",
               isMaximized ? "col-span-3" : "col-span-1 lg:col-span-3"
             )}>
-              <div className="bg-[#1e1e1e]/80 p-5 rounded-2xl border border-[#333]/60 h-fit shadow-xl backdrop-blur-sm space-y-6">
+              <div className="bg-[var(--surface-3)]/80 p-5 rounded-2xl border border-[var(--surface-border)]/60 h-fit shadow-xl backdrop-blur-sm space-y-6">
                 <div className="space-y-6">
                   <h4 className="text-[11px] font-black text-gray-500 uppercase tracking-[0.2em] flex items-center gap-3">
                     <LayoutGrid size={14} className="text-gray-600" /> Ações Rápidas
@@ -1739,7 +1739,7 @@ export default function CardDetailModal({
                       variant="ghost" 
                       size="sm" 
                       onClick={() => setIsMirrorDialogOpen(true)}
-                      className="bg-[#2a2a2a] hover:bg-[#333] text-gray-200 justify-start h-11 px-4 rounded-xl text-[10px] font-black transition-all border border-[#333]/50 hover:border-accent/30 shadow-sm w-full"
+                      className="bg-[var(--surface-2)] hover:bg-[var(--surface-border)] text-gray-200 justify-start h-11 px-4 rounded-xl text-[10px] font-black transition-all border border-[var(--surface-border)]/50 hover:border-accent/30 shadow-sm w-full"
                     >
                       <Copy className="w-3.5 h-3.5 mr-3 text-accent flex-shrink-0" /> <span className="truncate">{isEnglish ? "Mirror Card" : "Espelhar Cartão"}</span>
                     </Button>
@@ -1747,7 +1747,7 @@ export default function CardDetailModal({
                       variant="ghost" 
                       size="sm" 
                       onClick={handleArchiveCard}
-                      className="bg-[#2a2a2a] hover:bg-amber-950/20 hover:text-amber-400 text-gray-200 justify-start h-11 px-4 rounded-xl text-[10px] font-black transition-all border border-[#333]/50 hover:border-amber-400/30 shadow-sm w-full"
+                      className="bg-[var(--surface-2)] hover:bg-amber-950/20 hover:text-amber-400 text-gray-200 justify-start h-11 px-4 rounded-xl text-[10px] font-black transition-all border border-[var(--surface-border)]/50 hover:border-amber-400/30 shadow-sm w-full"
                     >
                       <Archive className="w-3.5 h-3.5 mr-3 text-amber-500 flex-shrink-0" /> <span className="truncate">{isEnglish ? "Archive Card" : "Arquivar Cartão"}</span>
                     </Button>
@@ -1764,7 +1764,7 @@ export default function CardDetailModal({
                   </div>
                 </div>
 
-                <Separator className="bg-[#333]/80" />
+                <Separator className="bg-[var(--surface-border)]/80" />
 
                 {mirrors && mirrors.length > 0 && (
                   <div className="space-y-5">
@@ -1845,7 +1845,7 @@ export default function CardDetailModal({
 
         {/* Mirror Selection Modal */}
         <Dialog open={isMirrorDialogOpen} onOpenChange={setIsMirrorDialogOpen}>
-          <DialogContent className="bg-[#1a1a1a] text-white border-[#333] max-w-md rounded-2xl shadow-2xl">
+          <DialogContent className="bg-[var(--surface-1)] text-white border-[var(--surface-border)] max-w-md rounded-2xl shadow-2xl">
             <DialogHeader className="space-y-2">
               <DialogTitle className="text-xl font-black">Espelhar este Cartão</DialogTitle>
               <p className="text-xs text-gray-400 font-medium leading-relaxed">Crie uma cópia sincronizada em tempo real deste cartão em outro quadro estratégico.</p>
@@ -1857,10 +1857,10 @@ export default function CardDetailModal({
                   setSelectedBoardId(val);
                   setSelectedListId("");
                 }}>
-                  <SelectTrigger className="bg-[#2a2a2a] border border-[#333] text-white h-12 rounded-xl px-4 font-bold focus:ring-accent">
+                  <SelectTrigger className="bg-[var(--surface-2)] border border-[var(--surface-border)] text-white h-12 rounded-xl px-4 font-bold focus:ring-accent">
                     <SelectValue placeholder="Selecione um quadro..." />
                   </SelectTrigger>
-                  <SelectContent className="bg-[#1a1a1a] border-[#333] text-white rounded-xl">
+                  <SelectContent className="bg-[var(--surface-1)] border-[var(--surface-border)] text-white rounded-xl">
                     {userBoards?.map(board => (
                       <SelectItem key={board.id} value={board.id.toString()} className="font-bold py-3">{board.name}</SelectItem>
                     ))}
@@ -1871,10 +1871,10 @@ export default function CardDetailModal({
               <div className="space-y-2.5">
                 <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Lista de Destino</label>
                 <Select value={selectedListId} onValueChange={setSelectedListId} disabled={!selectedBoardId}>
-                  <SelectTrigger className="bg-[#2a2a2a] border border-[#333] text-white h-12 rounded-xl px-4 font-bold focus:ring-accent disabled:opacity-50">
+                  <SelectTrigger className="bg-[var(--surface-2)] border border-[var(--surface-border)] text-white h-12 rounded-xl px-4 font-bold focus:ring-accent disabled:opacity-50">
                     <SelectValue placeholder="Escolha uma coluna..." />
                   </SelectTrigger>
-                  <SelectContent className="bg-[#1a1a1a] border-[#333] text-white rounded-xl">
+                  <SelectContent className="bg-[var(--surface-1)] border-[var(--surface-border)] text-white rounded-xl">
                     {targetLists?.map(list => (
                       <SelectItem key={list.id} value={list.id.toString()} className="font-bold py-3">{list.name}</SelectItem>
                     ))}

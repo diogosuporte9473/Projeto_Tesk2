@@ -18,7 +18,7 @@ export default function MasterDashboard() {
     onSuccess: () => {
       utils.branding.listAllTenants.invalidate();
       setShowNewForm(false);
-      setNewTenant({ slug: "", name: "", primaryColor: "#4b4897" });
+      setNewTenant({ slug: "", name: "", primaryColor: "#00d9ff" });
       toast.success("Novo ambiente criado com sucesso!");
     },
     onError: (err) => toast.error(`Erro ao criar: ${err.message}`)
@@ -32,7 +32,7 @@ export default function MasterDashboard() {
   });
 
   const [showNewForm, setShowNewForm] = useState(false);
-  const [newTenant, setNewTenant] = useState({ slug: "", name: "", primaryColor: "#4b4897" });
+  const [newTenant, setNewTenant] = useState({ slug: "", name: "", primaryColor: "#00d9ff" });
 
   // Proteção de rota
   if (!user || user.role !== 'master_admin') {
@@ -110,7 +110,7 @@ export default function MasterDashboard() {
                 <div className="flex items-center gap-3">
                   <div 
                     className="w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold"
-                    style={{ backgroundColor: t.primaryColor || '#4b4897' }}
+                    style={{ backgroundColor: t.primaryColor || '#00d9ff' }}
                   >
                     {t.name?.charAt(0)}
                   </div>

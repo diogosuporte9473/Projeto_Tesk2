@@ -26,6 +26,8 @@ export default defineConfig({
     },
   },
   envDir: path.resolve(__dirname),
+  // NEXT_PUBLIC_*: nomes criados pela integração Supabase <-> Vercel (valores públicos).
+  envPrefix: ["VITE_", "NEXT_PUBLIC_"],
   root: path.resolve(__dirname, "client"),
   publicDir: path.resolve(__dirname, "client", "public"),
   build: {

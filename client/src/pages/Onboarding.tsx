@@ -33,8 +33,8 @@ export default function Onboarding() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-      <Card className="w-full max-w-md">
+    <div className="min-h-screen flex items-center justify-center dms-grid p-4">
+      <Card className="w-full max-w-md dms-panel">
         <CardHeader>
           <CardTitle>Bem-vindo ao {appName}</CardTitle>
           <CardDescription>
