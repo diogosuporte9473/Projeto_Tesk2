@@ -84,7 +84,7 @@ export default function BoardView() {
   const [showArchivedModal, setShowArchivedModal] = useState(false);
   const [showMirrorSettings, setShowMirrorSettings] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
-    { role: "system", content: "You are a helpful assistant for the Maju Task Manager. You can help users organize their tasks, suggest project steps, and answer questions about their boards." }
+    { role: "system", content: "You are a helpful assistant for the DStasks. You can help users organize their tasks, suggest project steps, and answer questions about their boards." }
   ]);
 
   const sensors = useSensors(
@@ -506,7 +506,7 @@ function MirrorSettingsModal({ isOpen, onClose, boardId }: { isOpen: boolean; on
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="bg-[#1a1a1a] text-white border-[#333] max-w-md" aria-describedby={undefined}>
+      <DialogContent className="bg-[var(--surface-1)] text-white border-[var(--surface-border)] max-w-md" aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle className="text-xl font-bold flex items-center gap-2">
             <Settings2 className="w-5 h-5 text-accent" />
@@ -533,7 +533,7 @@ function MirrorSettingsModal({ isOpen, onClose, boardId }: { isOpen: boolean; on
                 { key: 'mirror_comments', label: 'Comentários', icon: MessageSquare },
                 { key: 'mirror_attachments', label: 'Anexos', icon: Paperclip },
               ].map((item) => (
-                <div key={item.key} className="flex items-center justify-between p-3 rounded-lg bg-[#222] border border-[#333] hover:border-accent/30 transition-all">
+                <div key={item.key} className="flex items-center justify-between p-3 rounded-lg bg-[var(--surface-3)] border border-[var(--surface-border)] hover:border-accent/30 transition-all">
                   <div className="flex items-center gap-3">
                     <item.icon className="w-4 h-4 text-gray-400" />
                     <span className="text-sm font-medium text-gray-200">{item.label}</span>
@@ -692,7 +692,7 @@ function ArchivedCardsModal({ isOpen, onClose, boardId }: { isOpen: boolean, onC
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent 
         aria-describedby={undefined}
-        className="max-w-2xl bg-[#1a1a1a] border-[#333] text-white"
+        className="max-w-2xl bg-[var(--surface-1)] border-[var(--surface-border)] text-white"
       >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -709,7 +709,7 @@ function ArchivedCardsModal({ isOpen, onClose, boardId }: { isOpen: boolean, onC
             <p className="text-center py-8 text-gray-500 text-sm">Nenhum cartão arquivado neste quadro.</p>
           ) : (
             archivedCards?.map((card: any) => (
-              <div key={card.id} className="flex items-center justify-between p-4 rounded-xl bg-[#222] border border-[#333] group hover:border-accent/30 transition-all">
+              <div key={card.id} className="flex items-center justify-between p-4 rounded-xl bg-[var(--surface-3)] border border-[var(--surface-border)] group hover:border-accent/30 transition-all">
                 <div className="flex-1 min-w-0">
                   <h4 className="font-bold text-sm text-gray-200 truncate">{card.title}</h4>
                   <p className="text-[10px] text-gray-500 mt-1">Arquivado em: {new Date(card.updated_at).toLocaleDateString()}</p>
@@ -719,7 +719,7 @@ function ArchivedCardsModal({ isOpen, onClose, boardId }: { isOpen: boolean, onC
                     variant="ghost" 
                     size="sm" 
                     onClick={() => handleUnarchive(card.id)}
-                    className="text-xs h-8 bg-[#2a2a2a] hover:bg-accent hover:text-white"
+                    className="text-xs h-8 bg-[var(--surface-2)] hover:bg-accent hover:text-accent-foreground"
                   >
                     Restaurar
                   </Button>
@@ -746,7 +746,7 @@ function BoardActivityModal({ isOpen, onClose, boardName, logs, isLoading }: { i
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent 
         aria-describedby={undefined}
-        className="max-w-2xl bg-[#1a1a1a] border-[#333] text-white"
+        className="max-w-2xl bg-[var(--surface-1)] border-[var(--surface-border)] text-white"
       >
         <DialogHeader>
           <div className="flex items-center justify-between pr-8">
@@ -771,7 +771,7 @@ function BoardActivityModal({ isOpen, onClose, boardName, logs, isLoading }: { i
             </div>
           ) : logs.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-center gap-3">
-              <div className="w-16 h-16 rounded-full bg-[#222] flex items-center justify-center border border-[#333]">
+              <div className="w-16 h-16 rounded-full bg-[var(--surface-3)] flex items-center justify-center border border-[var(--surface-border)]">
                 <Clock className="w-8 h-8 text-gray-600" />
               </div>
               <div>
@@ -781,7 +781,7 @@ function BoardActivityModal({ isOpen, onClose, boardName, logs, isLoading }: { i
             </div>
           ) : (
             logs?.map((log: any) => (
-              <div key={log.id} className="flex gap-4 p-4 rounded-2xl bg-[#222]/50 border border-[#333] hover:border-accent/20 transition-all group">
+              <div key={log.id} className="flex gap-4 p-4 rounded-2xl bg-[var(--surface-3)]/50 border border-[var(--surface-border)] hover:border-accent/20 transition-all group">
                 <div className="flex-shrink-0">
                   <div className="w-10 h-10 rounded-xl bg-accent/10 border border-accent/20 flex items-center justify-center text-accent text-xs font-black uppercase tracking-tighter shadow-inner group-hover:bg-accent group-hover:text-white transition-all duration-300">
                     {log.users?.name?.substring(0, 2) || "S"}
@@ -792,7 +792,7 @@ function BoardActivityModal({ isOpen, onClose, boardName, logs, isLoading }: { i
                     <p className="text-xs font-black text-gray-200 group-hover:text-white transition-colors">
                       {log.users?.name || "Sistema"}
                     </p>
-                    <span className="text-[10px] text-gray-500 font-black uppercase tracking-widest whitespace-nowrap bg-[#1a1a1a] px-2 py-0.5 rounded border border-[#333]">
+                    <span className="text-[10px] text-gray-500 font-black uppercase tracking-widest whitespace-nowrap bg-[var(--surface-1)] px-2 py-0.5 rounded border border-[var(--surface-border)]">
                       {formatDistanceToNow(new Date(log.created_at), { addSuffix: true, locale: ptBR })}
                     </span>
                   </div>
@@ -811,7 +811,7 @@ function BoardActivityModal({ isOpen, onClose, boardName, logs, isLoading }: { i
                       {log.entity_type}: {log.entity_name}
                     </span>
                   </div>
-                  <p className="text-[11px] text-gray-500 italic line-clamp-2 leading-relaxed font-medium border-l-2 border-[#333] pl-3 py-1 group-hover:border-accent/40 group-hover:text-gray-400 transition-all">
+                  <p className="text-[11px] text-gray-500 italic line-clamp-2 leading-relaxed font-medium border-l-2 border-[var(--surface-border)] pl-3 py-1 group-hover:border-accent/40 group-hover:text-gray-400 transition-all">
                     {log.details}
                   </p>
                 </div>
@@ -901,9 +901,9 @@ function ListColumn({ listId, listName, boardId }: { listId: number; listName: s
   return (
     <div 
       ref={setNodeRef}
-      className="flex-shrink-0 w-72 bg-[#1a1a1a] rounded-lg flex flex-col max-h-full border border-[#333] shadow-lg"
+      className="flex-shrink-0 w-72 bg-[var(--surface-1)] rounded-lg flex flex-col max-h-full border border-[var(--surface-border)] shadow-lg"
     >
-      <div className="p-3 flex items-center justify-between group/list bg-[#222] rounded-t-lg border-b border-[#333]">
+      <div className="p-3 flex items-center justify-between group/list bg-[var(--surface-3)] rounded-t-lg border-b border-[var(--surface-border)]">
         {isEditingName ? (
           <input
             ref={inputRef}
@@ -911,12 +911,12 @@ function ListColumn({ listId, listName, boardId }: { listId: number; listName: s
             onChange={(e) => setEditedName(e.target.value)}
             onBlur={handleUpdateName}
             onKeyDown={(e) => e.key === "Enter" && handleUpdateName()}
-            className="bg-[#2a2a2a] text-white text-sm font-semibold px-2 py-1 rounded w-full outline-none ring-1 ring-accent"
+            className="bg-[var(--surface-2)] text-white text-sm font-semibold px-2 py-1 rounded w-full outline-none ring-1 ring-accent"
           />
         ) : (
           <h2 
             onClick={() => setIsEditingName(true)}
-            className="text-sm font-semibold text-white px-2 py-1 cursor-pointer hover:bg-[#2a2a2a] rounded flex-1 truncate uppercase tracking-tight"
+            className="text-sm font-semibold text-white px-2 py-1 cursor-pointer hover:bg-[var(--surface-2)] rounded flex-1 truncate uppercase tracking-tight"
           >
             {listName}
           </h2>
@@ -928,8 +928,8 @@ function ListColumn({ listId, listName, boardId }: { listId: number; listName: s
               <MoreHorizontal className="w-4 h-4" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="bg-[#1a1a1a] border-[#333] text-white">
-            <DropdownMenuItem onClick={() => setIsEditingName(true)} className="flex items-center gap-2 cursor-pointer hover:bg-[#2a2a2a]">
+          <DropdownMenuContent align="end" className="bg-[var(--surface-1)] border-[var(--surface-border)] text-white">
+            <DropdownMenuItem onClick={() => setIsEditingName(true)} className="flex items-center gap-2 cursor-pointer hover:bg-[var(--surface-2)]">
               <Edit2 className="w-4 h-4" /> Renomear
             </DropdownMenuItem>
             <DropdownMenuItem onClick={handleDeleteList} className="flex items-center gap-2 text-red-400 cursor-pointer focus:text-red-400 focus:bg-red-400/10">
@@ -997,14 +997,14 @@ function ListColumn({ listId, listName, boardId }: { listId: number; listName: s
         </div>
       </div>
 
-      <div className="p-2 border-t border-[#333] bg-[#222]/30 rounded-b-lg">
+      <div className="p-2 border-t border-[var(--surface-border)] bg-[var(--surface-3)]/30 rounded-b-lg">
         {showNewCard ? (
-          <div className="p-2 bg-[#2a2a2a] rounded border border-[#444] shadow-sm">
+          <div className="p-2 bg-[var(--surface-2)] rounded border border-[var(--surface-border)] shadow-sm">
             <textarea
               placeholder="Digite o título do cartão..."
               value={newCardTitle}
               onChange={(e) => setNewCardTitle(e.target.value)}
-              className="w-full bg-[#1a1a1a] border border-[#444] rounded p-2 text-sm text-white placeholder-gray-500 resize-none focus:ring-1 focus:ring-accent outline-none mb-2"
+              className="w-full bg-[var(--surface-1)] border border-[var(--surface-border)] rounded p-2 text-sm text-white placeholder-gray-500 resize-none focus:ring-1 focus:ring-accent outline-none mb-2"
               rows={3}
               autoFocus
               onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), handleCreateCard())}

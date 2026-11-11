@@ -173,7 +173,7 @@ function BrandingSettings() {
                 type="text"
                 value={localName}
                 onChange={(e) => setLocalName(e.target.value)}
-                placeholder="Maju Tasks"
+                placeholder="DStasks"
                 className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-accent"
               />
               <p className="text-xs text-muted-foreground mt-2">

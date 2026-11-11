@@ -1,4 +1,4 @@
-# Maju Task Manager - TODO
+# DStasks - TODO
 
 ## Fase 1: Estrutura Base
 - [x] Schema do banco de dados (usuários, quadros, listas, cartões, permissões, espelhamentos)

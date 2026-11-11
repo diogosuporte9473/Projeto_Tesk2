@@ -104,7 +104,7 @@ export function DraggableCard({
             }
           }}
           className={cn(
-            "p-3 bg-[#3D3D3D] border-[#333] cursor-pointer hover:border-accent/40 hover:bg-[#252525] transition-all shadow-sm hover:shadow-lg rounded-xl flex flex-col gap-2.5",
+            "p-3 bg-[var(--surface-2)] border-[var(--surface-border)] cursor-pointer hover:border-accent/40 hover:bg-[#232a4d] transition-all shadow-sm hover:shadow-lg rounded-xl flex flex-col gap-2.5",
             isDragging && "ring-2 ring-accent shadow-2xl scale-[1.02]"
           )}
         >
@@ -185,8 +185,8 @@ export function DraggableCard({
 
             {/* Assignee Avatar */}
             {assignedToName && (
-              <Avatar className="h-5 w-5 border border-[#333] shadow-sm ring-1 ring-white/5">
-                <AvatarFallback className="bg-[#2a2a2a] text-[9px] font-black text-gray-400 uppercase">
+              <Avatar className="h-5 w-5 border border-[var(--surface-border)] shadow-sm ring-1 ring-white/5">
+                <AvatarFallback className="bg-[var(--surface-2)] text-[9px] font-black text-gray-400 uppercase">
                   {assignedToName.charAt(0)}
                 </AvatarFallback>
               </Avatar>

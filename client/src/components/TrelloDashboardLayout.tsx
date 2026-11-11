@@ -46,7 +46,7 @@ export default function TrelloDashboardLayout({ children }: TrelloDashboardLayou
       await createBoardMutation.mutateAsync({
         name: newBoardName,
         description: "",
-        color: "#4b4897",
+        color: "#00d9ff",
       });
       setNewBoardName("");
       setShowNewBoard(false);
@@ -57,51 +57,51 @@ export default function TrelloDashboardLayout({ children }: TrelloDashboardLayou
 
   return (
     <div className="flex h-screen bg-background">
-      <aside className="w-64 bg-primary text-primary-foreground border-r border-border flex flex-col">
-        <div className="p-6 border-b border-primary-foreground/10">
+      <aside className="w-64 bg-sidebar text-sidebar-foreground border-r border-sidebar-border flex flex-col">
+        <div className="p-6 border-b border-sidebar-foreground/10">
           <Link href="/">
             <div className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity overflow-hidden">
               {appLogo ? (
                 <img src={appLogo} alt={appName} className="h-10 w-auto object-contain" />
               ) : (
                 <div className="w-10 h-10 bg-accent rounded-lg flex items-center justify-center flex-shrink-0">
-                  <span className="text-primary font-bold">{appName.charAt(0)}</span>
+                  <span className="text-accent-foreground font-bold">{appName.charAt(0)}</span>
                 </div>
               )}
-              <h1 className="text-xl font-bold truncate">
+              <h1 className="text-xl font-bold truncate dms-gradient-text">
                 {appName}
               </h1>
             </div>
           </Link>
-          <p className="text-sm text-primary-foreground/70 mt-1">
+          <p className="text-sm text-sidebar-foreground/70 mt-1">
             {user?.role === 'master_admin' ? "Sistema de Segurança" : t("layout.taskManager")}
           </p>
         </div>
 
-        <div className="p-4 border-b border-primary-foreground/10">
+        <div className="p-4 border-b border-sidebar-foreground/10">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-accent rounded-full flex items-center justify-center">
-              <span className="text-primary font-bold text-sm">
+              <span className="text-accent-foreground font-bold text-sm">
                 {user?.name?.charAt(0).toUpperCase() || "U"}
               </span>
             </div>
             <div className="flex-1 min-w-0">
               <p className="font-semibold text-sm truncate">{user?.name || t("layout.userFallback")}</p>
-              <p className="text-xs text-primary-foreground/70 truncate">{user?.username}</p>
+              <p className="text-xs text-sidebar-foreground/70 truncate">{user?.username}</p>
             </div>
           </div>
         </div>
 
         <nav className="flex-1 overflow-y-auto p-4">
           <div className="mb-6">
-            <p className="text-xs font-semibold text-primary-foreground/50 uppercase tracking-wider mb-3">
+            <p className="text-xs font-semibold text-sidebar-foreground/50 uppercase tracking-wider mb-3">
               {t("layout.yourBoards")}
             </p>
             
             {isLoading ? (
               <div className="space-y-2">
                 {[1, 2, 3].map((i) => (
-                  <div key={i} className="h-10 bg-primary-foreground/10 rounded animate-pulse" />
+                  <div key={i} className="h-10 bg-sidebar-foreground/10 rounded animate-pulse" />
                 ))}
               </div>
             ) : boards && boards.length > 0 ? (
@@ -117,11 +117,11 @@ export default function TrelloDashboardLayout({ children }: TrelloDashboardLayou
                     }, {})
                   ).map(([tenant, tenantBoards]) => (
                     <div key={tenant} className="space-y-1">
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-primary-foreground/40 px-3 py-1 bg-primary-foreground/5 rounded-sm mb-1">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-sidebar-foreground/40 px-3 py-1 bg-sidebar-foreground/5 rounded-sm mb-1">
                         {tenant}
                       </p>
                       {(tenantBoards as any[]).map((board: any) => (
-                        <Link key={board.id} href={`/board/${board.id}`} className="block p-2 rounded-lg hover:bg-primary-foreground/10 transition-colors text-sm font-bold" style={{ color: 'var(--sidebar-board-text)' }}>
+                        <Link key={board.id} href={`/board/${board.id}`} className="block p-2 rounded-lg hover:bg-sidebar-foreground/10 transition-colors text-sm font-bold" style={{ color: 'var(--sidebar-board-text)' }}>
                           <div className="flex items-center gap-2">
                             <div
                               className="w-2.5 h-2.5 rounded-full flex-shrink-0"
@@ -137,7 +137,7 @@ export default function TrelloDashboardLayout({ children }: TrelloDashboardLayou
                   // Listagem normal para usuários comuns
                   <div className="space-y-1">
                     {(boards || []).map((board: any) => (
-                      <Link key={board.id} href={`/board/${board.id}`} className="block p-3 rounded-lg hover:bg-primary-foreground/10 transition-colors text-sm font-bold" style={{ color: 'var(--sidebar-board-text)' }}>
+                      <Link key={board.id} href={`/board/${board.id}`} className="block p-3 rounded-lg hover:bg-sidebar-foreground/10 transition-colors text-sm font-bold" style={{ color: 'var(--sidebar-board-text)' }}>
                         <div className="flex items-center gap-2">
                           <div
                             className="w-3 h-3 rounded-full flex-shrink-0"
@@ -151,7 +151,7 @@ export default function TrelloDashboardLayout({ children }: TrelloDashboardLayou
                 )}
               </div>
             ) : (
-              <p className="text-xs text-primary-foreground/60">{t("layout.noBoardsYet")}</p>
+              <p className="text-xs text-sidebar-foreground/60">{t("layout.noBoardsYet")}</p>
             )}
           </div>
 
@@ -165,13 +165,13 @@ export default function TrelloDashboardLayout({ children }: TrelloDashboardLayou
           </Button>
 
           {showNewBoard && (
-            <Card className="p-3 mb-4 bg-primary-foreground/5 border-accent">
+            <Card className="p-3 mb-4 bg-sidebar-foreground/5 border-accent">
               <input
                 type="text"
                 placeholder={t("layout.boardName")}
                 value={newBoardName}
                 onChange={(e) => setNewBoardName(e.target.value)}
-                className="w-full px-2 py-2 rounded bg-primary-foreground/10 text-primary-foreground placeholder-primary-foreground/50 text-sm mb-2 border border-primary-foreground/20"
+                className="w-full px-2 py-2 rounded bg-sidebar-foreground/10 text-sidebar-foreground placeholder-sidebar-foreground/50 text-sm mb-2 border border-sidebar-foreground/20"
                 onKeyPress={(e) => {
                   if (e.key === "Enter") handleCreateBoard();
                 }}
@@ -189,7 +189,7 @@ export default function TrelloDashboardLayout({ children }: TrelloDashboardLayou
                   onClick={() => setShowNewBoard(false)}
                   variant="outline"
                   size="sm"
-                  className="flex-1 text-xs border-primary-foreground/20 text-primary-foreground hover:bg-primary-foreground/10"
+                  className="flex-1 text-xs border-sidebar-foreground/20 text-sidebar-foreground hover:bg-sidebar-foreground/10"
                 >
                   {t("common.cancel")}
                 </Button>
@@ -198,7 +198,7 @@ export default function TrelloDashboardLayout({ children }: TrelloDashboardLayou
           )}
         </nav>
 
-        <div className="p-4 border-t border-primary-foreground/10 space-y-2">
+        <div className="p-4 border-t border-sidebar-foreground/10 space-y-2">
           {user?.role === 'master_admin' && (
             <Link href="/master" className="flex items-center gap-2 p-2 rounded bg-accent/20 hover:bg-accent/30 text-accent transition-colors text-sm font-bold">
               <ShieldAlert className="w-4 h-4" />
@@ -206,12 +206,12 @@ export default function TrelloDashboardLayout({ children }: TrelloDashboardLayou
             </Link>
           )}
           {user?.role === 'admin' && (
-            <Link href="/admin" className="flex items-center gap-2 p-2 rounded hover:bg-primary-foreground/10 transition-colors text-sm">
+            <Link href="/admin" className="flex items-center gap-2 p-2 rounded hover:bg-sidebar-foreground/10 transition-colors text-sm">
               <Users className="w-4 h-4" />
               {t("layout.admin")}
             </Link>
           )}
-          <Link href="/settings" className="flex items-center gap-2 p-2 rounded hover:bg-primary-foreground/10 transition-colors text-sm">
+          <Link href="/settings" className="flex items-center gap-2 p-2 rounded hover:bg-sidebar-foreground/10 transition-colors text-sm">
             <Settings className="w-4 h-4" />
             {t("layout.settings")}
           </Link>
@@ -219,7 +219,7 @@ export default function TrelloDashboardLayout({ children }: TrelloDashboardLayou
             onClick={logout}
             variant="outline"
             size="sm"
-            className="w-full justify-start border-primary-foreground/20 text-primary-foreground hover:bg-primary-foreground/10"
+            className="w-full justify-start border-sidebar-foreground/20 text-sidebar-foreground hover:bg-sidebar-foreground/10"
           >
             <LogOut className="w-4 h-4 mr-2" />
             {t("layout.logout")}

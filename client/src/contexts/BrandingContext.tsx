@@ -12,14 +12,35 @@ interface BrandingContextType {
 
 const BrandingContext = createContext<BrandingContextType | undefined>(undefined);
 
+// Roxo do tema antigo: era o padrão gravado para todo tenant, então não conta
+// como personalização -- nesses casos vale a paleta DMS do index.css.
+const LEGACY_DEFAULT_COLOR = '#4b4897';
+
+/** Aplica (ou remove) a cor de marca do tenant, com texto legível sobre ela. */
+function applyPrimaryColor(color: string | null | undefined) {
+  const style = document.documentElement.style;
+  const hex = (color || '').trim().toLowerCase();
+  const match = /^#([0-9a-f]{6})$/.exec(hex);
+  if (!match || hex === LEGACY_DEFAULT_COLOR) {
+    style.removeProperty('--primary');
+    style.removeProperty('--primary-foreground');
+    return;
+  }
+  const n = parseInt(match[1], 16);
+  const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  style.setProperty('--primary', hex);
+  style.setProperty('--primary-foreground', luminance > 0.6 ? '#0a0e27' : '#ffffff');
+}
+
 export function BrandingProvider({ children }: { children: React.ReactNode }) {
   const { data: brandingData } = trpc.branding.get.useQuery(undefined, {
     staleTime: Infinity,
   });
 
-  const [appName, setAppNameState] = useState('Sistema');
+  const [appName, setAppNameState] = useState('DStasks');
   const [appLogo, setAppLogoState] = useState<string | null>(null);
-  const [primaryColor, setPrimaryColorState] = useState('#4b4897');
+  const [primaryColor, setPrimaryColorState] = useState('#00d9ff');
 
   useEffect(() => {
     if (brandingData) {
@@ -28,8 +49,7 @@ export function BrandingProvider({ children }: { children: React.ReactNode }) {
       setPrimaryColorState(brandingData.primaryColor);
       
       // Aplicar cor primária dinamicamente ao CSS
-      document.documentElement.style.setProperty('--primary', brandingData.primaryColor);
-      // Opcional: calcular variantes mais claras/escuras se necessário
+      applyPrimaryColor(brandingData.primaryColor);
     }
   }, [brandingData]);
 
@@ -37,7 +57,7 @@ export function BrandingProvider({ children }: { children: React.ReactNode }) {
   const setAppLogo = (logo: string | null) => setAppLogoState(logo);
   const setPrimaryColor = (color: string) => {
     setPrimaryColorState(color);
-    document.documentElement.style.setProperty('--primary', color);
+    applyPrimaryColor(color);
   };
 
   useEffect(() => {
