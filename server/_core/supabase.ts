@@ -40,3 +40,23 @@ export const supabase = createClient(
     }
   }
 );
+
+/**
+ * Cliente descartável para login/cadastro (signInWithPassword / signUp).
+ *
+ * NUNCA faça login no cliente `supabase` acima: o supabase-js guarda a sessão
+ * em memória e passa a enviar o JWT do usuário em todas as consultas seguintes
+ * daquela instância do servidor, no lugar da service role key. Com RLS ligado
+ * isso faz as consultas voltarem vazias (e, sem RLS, faria um usuário "herdar"
+ * a identidade do último que fez login). Um cliente novo por chamada isola a
+ * sessão de cada login.
+ */
+export function createAuthClient() {
+  return createClient(ENV.supabaseUrl.trim(), serverKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+  });
+}

@@ -48,7 +48,7 @@ import {
 import { invokeLLM, Message } from "./_core/llm.js";
 import { ENV } from "./_core/env.js";
 
-import { supabase } from "./_core/supabase.js";
+import { supabase, createAuthClient } from "./_core/supabase.js";
 
 /**
  * Função utilitária para registrar logs de auditoria
@@ -222,7 +222,7 @@ export const appRouter = router({
         // 1. Tentar login via Supabase Auth
         const email = input.username.includes('@') ? input.username : `${input.username}@projeto-maju.com`;
         
-        const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        const { data: authData, error: authError } = await createAuthClient().auth.signInWithPassword({
           email,
           password: input.password,
         });
@@ -287,7 +287,7 @@ export const appRouter = router({
       .mutation(async ({ input, ctx }) => {
         const email = input.username.includes('@') ? input.username : `${input.username}@projeto-maju.com`;
 
-        const { data: authData, error: authError } = await supabase.auth.signUp({
+        const { data: authData, error: authError } = await createAuthClient().auth.signUp({
           email,
           password: input.password,
           options: {

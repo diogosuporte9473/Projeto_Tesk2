@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  * Testes de autorização (isolamento por tenant).
  * O Supabase é substituído por tabelas em memória: nada toca o banco real.
  */
-const { tables, fakeSupabase } = vi.hoisted(() => {
+const { tables, fakeSupabase, dataClientSignIn, authClientSignIn, createAuthClient } = vi.hoisted(() => {
   const tables: Record<string, any[]> = {};
 
   class Query {
@@ -43,14 +43,26 @@ const { tables, fakeSupabase } = vi.hoisted(() => {
     }
   }
 
+  // Cliente de dados (service role): login nele trocaria a identidade das consultas.
+  const dataClientSignIn = vi.fn();
   const fakeSupabase = {
     from: (table: string) => new Query(table),
-    auth: { getUser: async () => ({ data: { user: null }, error: null }) },
+    auth: {
+      getUser: async () => ({ data: { user: null }, error: null }),
+      signInWithPassword: dataClientSignIn,
+      signUp: dataClientSignIn,
+    },
   };
-  return { tables, fakeSupabase };
+  // Cliente descartável usado só para autenticar.
+  const authClientSignIn = vi.fn(async () => ({
+    data: { session: { access_token: "user-jwt", expires_in: 3600 } },
+    error: null,
+  }));
+  const createAuthClient = vi.fn(() => ({ auth: { signInWithPassword: authClientSignIn } }));
+  return { tables, fakeSupabase, dataClientSignIn, authClientSignIn, createAuthClient };
 });
 
-vi.mock("./_core/supabase.js", () => ({ supabase: fakeSupabase }));
+vi.mock("./_core/supabase.js", () => ({ supabase: fakeSupabase, createAuthClient }));
 
 import { appRouter } from "./routers.js";
 import { assertAccess } from "./_core/access.js";
@@ -201,5 +213,15 @@ describe("admin.users", () => {
 describe("tenant.create", () => {
   it("é recusado para quem já pertence a um ambiente", async () => {
     await expect(callerFor(1).tenant.create({ name: "Outro ambiente" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+});
+
+describe("auth.login", () => {
+  it("autentica em um cliente descartável, nunca no cliente de dados", async () => {
+    const user = await callerFor(1).auth.login({ username: "alice", password: "segredo" });
+    expect(user.username).toBe("alice");
+    expect(createAuthClient).toHaveBeenCalledTimes(1);
+    expect(authClientSignIn).toHaveBeenCalledTimes(1);
+    expect(dataClientSignIn).not.toHaveBeenCalled();
   });
 });
