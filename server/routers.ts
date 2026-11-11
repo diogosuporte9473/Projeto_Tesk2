@@ -3,6 +3,7 @@ import { and } from "drizzle-orm";
 import { getSessionCookieOptions } from "./_core/cookies.js";
 import { systemRouter } from "./_core/systemRouter.js";
 import { publicProcedure, router, protectedProcedure } from "./_core/trpc.js";
+import { guardedProcedure, assertAccess, isTenantAdmin } from "./_core/access.js";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
@@ -85,9 +86,14 @@ async function createAuditLog({
 }
 
 const rawJwtSecret = (ENV.cookieSecret || "").trim();
-const JWT_SECRET = new TextEncoder().encode(rawJwtSecret || "temporary_development_secret_32_chars_long_minimum");
+const jwtSecretIsStrong = rawJwtSecret.length >= 32;
+// Em produção nunca assinamos tokens com um segredo ausente/curto: o login de
+// fallback (bcrypt local) fica desabilitado até JWT_SECRET ser configurado.
+const JWT_SECRET = new TextEncoder().encode(
+  jwtSecretIsStrong || ENV.isProduction ? rawJwtSecret : "temporary_development_secret_32_chars_long_minimum"
+);
 
-if (ENV.isProduction && rawJwtSecret.length < 32) {
+if (ENV.isProduction && !jwtSecretIsStrong) {
   console.warn("⚠️ CRITICAL: JWT_SECRET environment variable is too short (min 32 chars). Manual signing of tokens may be insecure or fail. Please set a strong JWT_SECRET in your Vercel Project Settings.");
 }
 
@@ -152,7 +158,7 @@ const auditRouter = router({
 });
 
 const boardMirrorSettingsRouter = router({
-  get: protectedProcedure
+  get: guardedProcedure({ boardId: "board" })
     .input(z.object({ boardId: z.number() }))
     .query(async ({ input }) => {
       const { data, error } = await supabase
@@ -162,12 +168,23 @@ const boardMirrorSettingsRouter = router({
         .maybeSingle();
       return data;
     }),
-  update: protectedProcedure
+  update: guardedProcedure({ boardId: "board" })
     .input(z.object({
       boardId: z.number(),
-      settings: z.any()
+      settings: z.object({
+        mirror_labels: z.boolean(),
+        mirror_checklists: z.boolean(),
+        mirror_comments: z.boolean(),
+        mirror_attachments: z.boolean(),
+        mirror_custom_fields: z.boolean(),
+        mirror_dates: z.boolean(),
+        mirror_description: z.boolean(),
+      }).partial()
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
+      if (!isTenantAdmin(ctx.user)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Apenas administradores podem configurar espelhamento" });
+      }
       const { error } = await supabase
         .from("board_mirror_settings")
         .upsert({
@@ -215,12 +232,16 @@ export const appRouter = router({
           
           const user = await getUserByUsername(input.username);
           if (!user) {
-            throw new TRPCError({ code: "UNAUTHORIZED", message: "User not found" });
+            throw new TRPCError({ code: "UNAUTHORIZED", message: "Usuário ou senha inválidos" });
           }
 
           const valid = await bcrypt.compare(input.password, user.password);
           if (!valid) {
-            throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid password" });
+            throw new TRPCError({ code: "UNAUTHORIZED", message: "Usuário ou senha inválidos" });
+          }
+
+          if (ENV.isProduction && !jwtSecretIsStrong) {
+            throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Login indisponível: JWT_SECRET não configurado" });
           }
 
           const token = await new SignJWT({})
@@ -258,10 +279,10 @@ export const appRouter = router({
         return user;
       }),
     register: publicProcedure
-      .input(z.object({ 
-        username: z.string(), 
-        password: z.string(), 
-        name: z.string().optional()
+      .input(z.object({
+        username: z.string().trim().min(3).max(255),
+        password: z.string().min(6).max(200),
+        name: z.string().max(255).optional()
       }))
       .mutation(async ({ input, ctx }) => {
         const email = input.username.includes('@') ? input.username : `${input.username}@projeto-maju.com`;
@@ -326,6 +347,11 @@ export const appRouter = router({
         if (!ctx.user) {
           throw new TRPCError({ code: "UNAUTHORIZED" });
         }
+        // Onboarding: só quem ainda não pertence a um ambiente pode criar um
+        // (impede que um membro comum se promova a admin criando outro tenant).
+        if (ctx.user.tenantId) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Você já pertence a um ambiente" });
+        }
 
         const slug = input.name.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-');
         
@@ -368,14 +394,14 @@ export const appRouter = router({
       if (!ctx.tenantId) return [];
       return await getAllTenantBoards(ctx.tenantId);
     }),
-    get: protectedProcedure
+    get: guardedProcedure({ id: "board" })
       .input(z.object({ id: z.number() }))
       .query(async ({ ctx, input }) => {
         const board = await getBoardById(input.id, ctx.user.id, ctx.tenantId || undefined, ctx.user.role, true);
         if (!board) throw new TRPCError({ code: "NOT_FOUND", message: "Board not found or access denied" });
         return board;
       }),
-    getMembers: protectedProcedure
+    getMembers: guardedProcedure({ boardId: "board" })
       .input(z.object({ boardId: z.number() }))
       .query(async ({ ctx, input }) => {
         const board = await getBoardById(input.boardId, ctx.user.id, ctx.tenantId || undefined, ctx.user.role);
@@ -475,7 +501,7 @@ export const appRouter = router({
 
         return { id: board.id };
       }),
-    update: protectedProcedure
+    update: guardedProcedure({ id: "board" })
       .input(
         z.object({
           id: z.number(),
@@ -512,7 +538,7 @@ export const appRouter = router({
 
         return { success: true };
       }),
-    delete: protectedProcedure
+    delete: guardedProcedure({ id: "board" })
       .input(z.object({ id: z.number() }))
       .mutation(async ({ ctx, input }) => {
         const board = await getBoardById(input.id, ctx.user.id);
@@ -540,7 +566,7 @@ export const appRouter = router({
         return { success: true };
       }),
 
-    addMember: protectedProcedure
+    addMember: guardedProcedure({ boardId: "board", userId: "user" })
       .input(
         z.object({
           boardId: z.number(),
@@ -567,7 +593,7 @@ export const appRouter = router({
         return { success: true };
       }),
 
-    getMirrorSettings: protectedProcedure
+    getMirrorSettings: guardedProcedure({ boardId: "board" })
       .input(z.object({ boardId: z.number() }))
       .query(async ({ input }) => {
         const { data, error } = await supabase
@@ -592,7 +618,7 @@ export const appRouter = router({
         return data;
       }),
 
-    updateMirrorSettings: protectedProcedure
+    updateMirrorSettings: guardedProcedure({ boardId: "board" })
       .input(z.object({
         boardId: z.number(),
         settings: z.object({
@@ -629,7 +655,7 @@ export const appRouter = router({
       // Se for usuário Master, o nome da aplicação deve ser "Dms Security"
       // Conforme solicitação: "remova esse nome das aplicão todo usuario Master tem que aparecer Dms Security."
       const isMaster = ctx.user?.role === 'master_admin';
-      const defaultName = isMaster ? "Dms Security" : "Maju Tasks";
+      const defaultName = isMaster ? "Dms Security" : "DStasks";
 
       if (!ctx.tenantId) return { appName: defaultName, appLogoUrl: null, primaryColor: "#4b4897" };
       
@@ -642,7 +668,7 @@ export const appRouter = router({
       }
       
       return {
-        appName: isMaster ? "Dms Security" : (data.name || "Maju Tasks"),
+        appName: isMaster ? "Dms Security" : (data.name || "DStasks"),
         appLogoUrl: data.appLogoUrl || null,
         primaryColor: data.primaryColor || "#4b4897",
       };
@@ -656,7 +682,10 @@ export const appRouter = router({
       }))
       .mutation(async ({ ctx, input }) => {
         if (!ctx.tenantId) throw new TRPCError({ code: "BAD_REQUEST" });
-        
+        if (!isTenantAdmin(ctx.user)) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Apenas administradores podem alterar a identidade visual" });
+        }
+
         const db = await getDb();
         if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database connection failed" });
         
@@ -717,7 +746,7 @@ export const appRouter = router({
 
   // Lists routers
   lists: router({
-    getByBoard: protectedProcedure
+    getByBoard: guardedProcedure({ boardId: "board" })
       .input(z.object({ boardId: z.number() }))
       .query(async ({ ctx, input }) => {
         const board = await getBoardById(input.boardId, ctx.user.id, ctx.tenantId || undefined, ctx.user.role, true);
@@ -729,7 +758,7 @@ export const appRouter = router({
         }
         return await getBoardLists(input.boardId);
       }),
-    create: protectedProcedure
+    create: guardedProcedure({ boardId: "board" })
       .input(
         z.object({
           boardId: z.number(),
@@ -771,14 +800,14 @@ export const appRouter = router({
 
         return { id: data.id };
       }),
-    delete: protectedProcedure
+    delete: guardedProcedure({ id: "list" })
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => {
         const { error } = await supabase.from("lists").delete().eq("id", input.id);
         if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: error.message });
         return { success: true };
       }),
-    update: protectedProcedure
+    update: guardedProcedure({ id: "list" })
       .input(z.object({ id: z.number(), name: z.string().min(1).max(255) }))
       .mutation(async ({ input }) => {
         const { error } = await supabase
@@ -792,12 +821,12 @@ export const appRouter = router({
 
   // Cards routers
   cards: router({
-    getByList: protectedProcedure
+    getByList: guardedProcedure({ listId: "list" })
       .input(z.object({ listId: z.number() }))
       .query(async ({ ctx, input }) => {
         return await getListCards(input.listId);
       }),
-    getArchivedByBoard: protectedProcedure
+    getArchivedByBoard: guardedProcedure({ boardId: "board" })
       .input(z.object({ boardId: z.number() }))
       .query(async ({ ctx, input }) => {
         const { data, error } = await supabase
@@ -809,7 +838,7 @@ export const appRouter = router({
         if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: error.message });
         return data;
       }),
-    create: protectedProcedure
+    create: guardedProcedure({ listId: "list" })
       .input(
         z.object({
           listId: z.number(),
@@ -866,7 +895,7 @@ export const appRouter = router({
           });
         }
       }),
-    getDetails: protectedProcedure
+    getDetails: guardedProcedure({ id: "card" })
       .input(z.object({ id: z.number() }))
       .query(async ({ input }) => {
         const card = await getCardById(input.id);
@@ -885,7 +914,7 @@ export const appRouter = router({
           customFields,
         };
       }),
-    update: protectedProcedure
+    update: guardedProcedure({ id: "card", assignedTo: "user" })
       .input(
         z.object({
           id: z.number(),
@@ -930,7 +959,7 @@ export const appRouter = router({
 
         return { success: true };
       }),
-    delete: protectedProcedure
+    delete: guardedProcedure({ id: "card" })
       .input(z.object({ id: z.number() }))
       .mutation(async ({ ctx, input }) => {
         // Restrição: Apenas administradores podem excluir cartões permanentemente
@@ -955,7 +984,7 @@ export const appRouter = router({
 
         return { success: true };
       }),
-    reorder: protectedProcedure
+    reorder: guardedProcedure({ cardId: "card", newListId: "list" })
       .input(
         z.object({
           cardId: z.number(),
@@ -1112,7 +1141,7 @@ export const appRouter = router({
 
   // Labels, Checklists, Custom Fields and Project Dates
   cardDetails: router({
-    getDetails: protectedProcedure
+    getDetails: guardedProcedure({ id: "card" })
       .input(z.object({ id: z.number() }))
       .query(async ({ input }) => {
         // Tenta obter o card com as relações usando Supabase REST
@@ -1173,12 +1202,12 @@ export const appRouter = router({
         };
       }),
 
-    getLabels: protectedProcedure
+    getLabels: guardedProcedure({ cardId: "card" })
       .input(z.object({ cardId: z.number() }))
       .query(async ({ input }) => {
         return await getCardLabels(input.cardId);
       }),
-    addLabel: protectedProcedure
+    addLabel: guardedProcedure({ cardId: "card" })
       .input(z.object({ cardId: z.number(), label: z.string(), color: z.string().optional() }))
       .mutation(async ({ input }) => {
         const { data, error } = await supabase
@@ -1222,7 +1251,7 @@ export const appRouter = router({
 
         return { id: data.id };
       }),
-    deleteLabel: protectedProcedure
+    deleteLabel: guardedProcedure({ id: "card_labels" })
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => {
         // Buscar info da etiqueta antes de deletar para sincronizar
@@ -1263,7 +1292,7 @@ export const appRouter = router({
 
         return { success: true };
       }),
-    updateDescription: protectedProcedure
+    updateDescription: guardedProcedure({ cardId: "card" })
       .input(z.object({ cardId: z.number(), description: z.string() }))
       .mutation(async ({ input }) => {
         try {
@@ -1310,7 +1339,7 @@ export const appRouter = router({
         }
       }),
 
-    updateDueDate: protectedProcedure
+    updateDueDate: guardedProcedure({ cardId: "card" })
       .input(z.object({ cardId: z.number(), dueDate: z.date().nullish() }))
       .mutation(async ({ input }) => {
         const isoDate = input.dueDate ? input.dueDate.toISOString() : null;
@@ -1369,7 +1398,7 @@ export const appRouter = router({
         return { success: true };
       }),
 
-    updateStartDate: protectedProcedure
+    updateStartDate: guardedProcedure({ cardId: "card" })
       .input(z.object({ cardId: z.number(), startDate: z.date().nullish() }))
       .mutation(async ({ input }) => {
         const isoDate = input.startDate ? input.startDate.toISOString() : null;
@@ -1428,7 +1457,7 @@ export const appRouter = router({
         return { success: true };
       }),
 
-    updateAssignedTo: protectedProcedure
+    updateAssignedTo: guardedProcedure({ cardId: "card", userId: "user" })
       .input(z.object({ cardId: z.number(), userId: z.number().nullish() }))
       .mutation(async ({ input }) => {
         const { error } = await supabase
@@ -1461,7 +1490,7 @@ export const appRouter = router({
         return { success: true };
       }),
 
-    updateStatus: protectedProcedure
+    updateStatus: guardedProcedure({ cardId: "card" })
       .input(z.object({ cardId: z.number(), status: z.enum(["open", "completed"]) }))
       .mutation(async ({ input }) => {
         // Atualiza apenas o cartão específico solicitado
@@ -1478,7 +1507,7 @@ export const appRouter = router({
         return { success: true };
       }),
 
-    cloneCard: protectedProcedure
+    cloneCard: guardedProcedure({ cardId: "card", listId: "list" })
       .input(z.object({ cardId: z.number(), listId: z.number().optional() }))
       .mutation(async ({ ctx, input }) => {
         // 1. Buscar dados do cartão original
@@ -1543,7 +1572,7 @@ export const appRouter = router({
         return { id: clone.id };
       }),
 
-    moveCard: protectedProcedure
+    moveCard: guardedProcedure({ cardId: "card", targetListId: "list" })
       .input(z.object({ cardId: z.number(), targetListId: z.number() }))
       .mutation(async ({ input }) => {
         const { error } = await supabase
@@ -1555,7 +1584,7 @@ export const appRouter = router({
         return { success: true };
       }),
 
-    getCardUsers: protectedProcedure
+    getCardUsers: guardedProcedure({ cardId: "card" })
       .input(z.object({ cardId: z.number() }))
       .query(async ({ ctx }) => {
         // Retorna todos os usuários do mesmo tenant (exceto master_admin) para permitir atribuição no checklist
@@ -1568,7 +1597,7 @@ export const appRouter = router({
         return data;
       }),
 
-    getMirroredInfo: protectedProcedure
+    getMirroredInfo: guardedProcedure({ cardId: "card" })
       .input(z.object({ cardId: z.number() }))
       .query(async ({ input }) => {
         const { data: mirrors, error } = await supabase
@@ -1607,7 +1636,7 @@ export const appRouter = router({
         };
       }),
 
-    archiveCard: protectedProcedure
+    archiveCard: guardedProcedure({ id: "card" })
       .input(z.object({ id: z.number(), archived: z.boolean() }))
       .mutation(async ({ ctx, input }) => {
         const { error } = await supabase
@@ -1636,7 +1665,7 @@ export const appRouter = router({
         return { success: true };
       }),
 
-    getAttachments: protectedProcedure
+    getAttachments: guardedProcedure({ cardId: "card" })
       .input(z.object({ cardId: z.number() }))
       .query(async ({ input }) => {
         try {
@@ -1649,11 +1678,11 @@ export const appRouter = router({
           throw error;
         }
       }),
-    addAttachment: protectedProcedure
+    addAttachment: guardedProcedure({ cardId: "card" })
       .input(z.object({ 
         cardId: z.number(), 
-        filename: z.string(), 
-        fileUrl: z.string(), 
+        filename: z.string().min(1).max(500),
+        fileUrl: z.string().max(2000).refine((u) => /^https?:\/\//i.test(u), "URL de anexo inválida"),  
         fileKey: z.string(),
         mimeType: z.string(),
         fileSize: z.number()
@@ -1710,7 +1739,7 @@ export const appRouter = router({
 
         return { id: data.id };
       }),
-    deleteAttachment: protectedProcedure
+    deleteAttachment: guardedProcedure({ id: "card_attachments" })
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => {
         const { error } = await supabase.from("card_attachments").delete().eq("id", input.id);
@@ -1718,7 +1747,7 @@ export const appRouter = router({
         return { success: true };
       }),
 
-    getChecklists: protectedProcedure
+    getChecklists: guardedProcedure({ cardId: "card" })
       .input(z.object({ cardId: z.number() }))
       .query(async ({ input }) => {
         const [groups, items] = await Promise.all([
@@ -1734,7 +1763,7 @@ export const appRouter = router({
           items: checklistItems.filter((i: any) => i.group_id === g.id)
         }));
       }),
-    addChecklistGroup: protectedProcedure
+    addChecklistGroup: guardedProcedure({ cardId: "card" })
       .input(z.object({ cardId: z.number(), title: z.string() }))
       .mutation(async ({ input }) => {
         const { data: currentGroups } = await supabase
@@ -1799,7 +1828,7 @@ export const appRouter = router({
 
         return { id: data.id };
       }),
-    updateChecklistGroup: protectedProcedure
+    updateChecklistGroup: guardedProcedure({ id: "card_checklist_groups" })
       .input(z.object({ id: z.number(), title: z.string() }))
       .mutation(async ({ input }) => {
         // 1. Buscar info do grupo antes de atualizar para sincronizar
@@ -1841,7 +1870,7 @@ export const appRouter = router({
 
         return { success: true };
       }),
-    deleteChecklistGroup: protectedProcedure
+    deleteChecklistGroup: guardedProcedure({ id: "card_checklist_groups" })
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => {
         // 1. Buscar info do grupo antes de deletar para sincronizar
@@ -1885,7 +1914,7 @@ export const appRouter = router({
 
         return { success: true };
       }),
-    copyChecklistGroup: protectedProcedure
+    copyChecklistGroup: guardedProcedure({ groupId: "card_checklist_groups", targetCardId: "card" })
       .input(z.object({ groupId: z.number(), targetCardId: z.number() }))
       .mutation(async ({ input }) => {
         // 1. Buscar o grupo original
@@ -2005,7 +2034,7 @@ export const appRouter = router({
 
         return { id: newGroup.id };
       }),
-    addChecklist: protectedProcedure
+    addChecklist: guardedProcedure({ cardId: "card", groupId: "card_checklist_groups", assignedUserId: "user" })
       .input(z.object({ 
         cardId: z.number(), 
         groupId: z.number().optional(), 
@@ -2109,7 +2138,7 @@ export const appRouter = router({
 
         return { id: data.id };
       }),
-    updateChecklistItem: protectedProcedure
+    updateChecklistItem: guardedProcedure({ id: "card_checklists", assignedUserId: "user" })
       .input(z.object({ 
         id: z.number(), 
         completed: z.boolean().optional(),
@@ -2233,9 +2262,13 @@ export const appRouter = router({
       }),
     reorderChecklist: protectedProcedure
       .input(z.object({ 
-        items: z.array(z.object({ id: z.number(), position: z.number() }))
+        items: z.array(z.object({ id: z.number(), position: z.number() })).max(500)
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
+        // Valida todos os itens antes de alterar qualquer um.
+        for (const item of input.items) {
+          await assertAccess(ctx.user, "card_checklists", item.id);
+        }
         for (const item of input.items) {
           const { error } = await supabase
             .from("card_checklists")
@@ -2245,7 +2278,7 @@ export const appRouter = router({
         }
         return { success: true };
       }),
-    deleteChecklist: protectedProcedure
+    deleteChecklist: guardedProcedure({ id: "card_checklists" })
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => {
         // 1. Buscar info do item antes de deletar para sincronizar
@@ -2312,12 +2345,12 @@ export const appRouter = router({
         return { success: true };
       }),
 
-    getCustomFields: protectedProcedure
+    getCustomFields: guardedProcedure({ cardId: "card" })
       .input(z.object({ cardId: z.number() }))
       .query(async ({ input }) => {
         return await getCardCustomFields(input.cardId);
       }),
-    addCustomField: protectedProcedure
+    addCustomField: guardedProcedure({ cardId: "card" })
       .input(z.object({
         cardId: z.number(),
         fieldName: z.string(),
@@ -2346,7 +2379,7 @@ export const appRouter = router({
 
         return { id: data.id };
       }),
-    deleteCustomField: protectedProcedure
+    deleteCustomField: guardedProcedure({ id: "card_custom_fields" })
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => {
         const { error } = await supabase
@@ -2365,7 +2398,7 @@ export const appRouter = router({
         return { success: true };
       }),
 
-    updateCustomField: protectedProcedure
+    updateCustomField: guardedProcedure({ id: "card_custom_fields" })
       .input(z.object({ 
         id: z.number(), 
         fieldValue: z.string()
@@ -2380,7 +2413,7 @@ export const appRouter = router({
         return { success: true };
       }),
 
-    upsertCustomField: protectedProcedure
+    upsertCustomField: guardedProcedure({ cardId: "card" })
       .input(z.object({
         cardId: z.number(),
         fieldName: z.string(),
@@ -2433,7 +2466,7 @@ export const appRouter = router({
         return { success: true };
       }),
 
-    getProjectDates: protectedProcedure
+    getProjectDates: guardedProcedure({ cardId: "card" })
       .input(z.object({ cardId: z.number() }))
       .query(async ({ input }) => {
         const { data, error } = await supabase
@@ -2452,7 +2485,7 @@ export const appRouter = router({
           end_date: data.project_end_date
         };
       }),
-    upsertProjectDates: protectedProcedure
+    upsertProjectDates: guardedProcedure({ cardId: "card" })
       .input(z.object({
         cardId: z.number(),
         startDate: z.date().nullish(),
@@ -2499,7 +2532,7 @@ export const appRouter = router({
         return { success: true };
       }),
 
-    getComments: protectedProcedure
+    getComments: guardedProcedure({ cardId: "card" })
       .input(z.object({ cardId: z.number() }))
       .query(async ({ input }) => {
         const { data, error } = await supabase
@@ -2526,7 +2559,7 @@ export const appRouter = router({
           userName: c.users?.name || c.users?.username || "Usuário"
         }));
       }),
-    addComment: protectedProcedure
+    addComment: guardedProcedure({ cardId: "card" })
       .input(z.object({ cardId: z.number(), content: z.string() }))
       .mutation(async ({ ctx, input }) => {
         const { data, error } = await supabase
@@ -2572,7 +2605,7 @@ export const appRouter = router({
 
         return { id: data.id };
       }),
-    deleteComment: protectedProcedure
+    deleteComment: guardedProcedure({ id: "card_comments" })
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => {
         const { error } = await supabase.from("card_comments").delete().eq("id", input.id);
@@ -2580,7 +2613,7 @@ export const appRouter = router({
         return { success: true };
       }),
 
-    createMirror: protectedProcedure
+    createMirror: guardedProcedure({ cardId: "card", targetListId: "list", targetBoardId: "board" })
       .input(z.object({
         cardId: z.number(),
         targetListId: z.number(),
@@ -2790,13 +2823,13 @@ export const appRouter = router({
         return { success: true, mirrorId: mirrorCard.id };
       }),
 
-    getMirroredCards: protectedProcedure
+    getMirroredCards: guardedProcedure({ boardId: "board" })
       .input(z.object({ boardId: z.number() }))
       .query(async ({ input }) => {
         return await getMirroredCards(input.boardId);
       }),
 
-    getCardMirrors: protectedProcedure
+    getCardMirrors: guardedProcedure({ cardId: "card" })
       .input(z.object({ cardId: z.number() }))
       .query(async ({ input }) => {
         // Busca onde este card é o ORIGINAL
@@ -2865,7 +2898,10 @@ export const appRouter = router({
           if (ctx.user.role !== 'admin' && ctx.user.role !== 'master_admin') {
             throw new TRPCError({ code: 'FORBIDDEN', message: 'Acesso negado' });
           }
-          
+          if (!ctx.user.tenantId) {
+            throw new TRPCError({ code: 'BAD_REQUEST', message: 'Crie ou selecione um ambiente antes de cadastrar usuários' });
+          }
+
           const hashedPassword = await bcrypt.hash(input.password, 10);
           const email = input.username.includes('@') ? input.username : `${input.username}@projeto-maju.com`;
 
@@ -2905,7 +2941,7 @@ export const appRouter = router({
 
           return { id: data.id };
         }),
-      update: protectedProcedure
+      update: guardedProcedure({ id: "user" })
         .input(z.object({
           id: z.number(),
           name: z.string().optional(),
@@ -2913,28 +2949,76 @@ export const appRouter = router({
           password: z.string().min(6).optional(),
         }))
         .mutation(async ({ ctx, input }) => {
-          if (ctx.user.role !== 'admin' && ctx.user.id !== input.id) {
+          const isSelf = ctx.user.id === input.id;
+          if (!isTenantAdmin(ctx.user) && !isSelf) {
+            throw new TRPCError({ code: 'FORBIDDEN', message: 'Você não tem permissão para atualizar este usuário' });
+          }
+
+          // O alvo precisa ser do mesmo tenant (guardedProcedure) e um admin de
+          // tenant nunca altera um master_admin.
+          const { data: target } = await supabase
+            .from("users")
+            .select("id, role")
+            .eq("id", input.id)
+            .maybeSingle();
+          if (!target) throw new TRPCError({ code: 'NOT_FOUND', message: 'Usuário não encontrado' });
+          if (target.role === 'master_admin' && ctx.user.role !== 'master_admin') {
             throw new TRPCError({ code: 'FORBIDDEN', message: 'Você não tem permissão para atualizar este usuário' });
           }
 
           const updateData: any = {};
           if (input.name) updateData.name = input.name;
-          if (input.role && ctx.user.role === 'admin') updateData.role = input.role;
+          // Ninguém altera o próprio papel; só admins alteram o de terceiros.
+          if (input.role && isTenantAdmin(ctx.user) && !isSelf && target.role !== 'master_admin') {
+            updateData.role = input.role;
+          }
           if (input.password) updateData.password = await bcrypt.hash(input.password, 10);
+
+          if (Object.keys(updateData).length === 0) return { success: true };
 
           const { error } = await supabase.from("users").update(updateData).eq("id", input.id);
           if (error) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: error.message });
+
+          await createAuditLog({
+            userId: ctx.user.id,
+            tenantId: ctx.tenantId,
+            action: 'update',
+            entityType: 'user',
+            entityId: input.id,
+            entityName: input.name || `Usuário ${input.id}`,
+            details: `Usuário atualizado: ${Object.keys(updateData).join(", ")}`
+          });
           return { success: true };
         }),
-      delete: protectedProcedure
+      delete: guardedProcedure({ id: "user" })
         .input(z.object({ id: z.number() }))
         .mutation(async ({ ctx, input }) => {
-          if (ctx.user.role !== 'admin') {
+          if (!isTenantAdmin(ctx.user)) {
             throw new TRPCError({ code: 'FORBIDDEN', message: 'Apenas administradores podem remover usuários' });
           }
           if (ctx.user.id === input.id) {
             throw new TRPCError({ code: 'BAD_REQUEST', message: 'Você não pode remover seu próprio usuário' });
           }
+
+          const { data: target } = await supabase
+            .from("users")
+            .select("id, role, username")
+            .eq("id", input.id)
+            .maybeSingle();
+          if (!target) throw new TRPCError({ code: 'NOT_FOUND', message: 'Usuário não encontrado' });
+          if (target.role === 'master_admin' && ctx.user.role !== 'master_admin') {
+            throw new TRPCError({ code: 'FORBIDDEN', message: 'Você não tem permissão para remover este usuário' });
+          }
+
+          await createAuditLog({
+            userId: ctx.user.id,
+            tenantId: ctx.tenantId,
+            action: 'delete',
+            entityType: 'user',
+            entityId: input.id,
+            entityName: target.username || `Usuário ${input.id}`,
+            details: `Usuário removido: ${target.username || input.id}`
+          });
 
           const { error } = await supabase.from("users").delete().eq("id", input.id);
           if (error) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: error.message });
@@ -2942,11 +3026,11 @@ export const appRouter = router({
         }),
     }),
     boards: router({
-      addMember: protectedProcedure
+      addMember: guardedProcedure({ boardId: "board", userId: "user" })
         .input(z.object({ boardId: z.number(), userId: z.number(), role: z.enum(['viewer', 'editor', 'admin']).default('viewer') }))
         .mutation(async ({ ctx, input }) => {
-          const board = await getBoardById(input.boardId, ctx.user.id);
-          if (!board || (board.ownerId !== ctx.user.id && ctx.user.role !== 'admin')) {
+          const board = await getBoardById(input.boardId);
+          if (!board || (board.ownerId !== ctx.user.id && !isTenantAdmin(ctx.user))) {
             throw new TRPCError({ code: 'FORBIDDEN', message: 'Apenas o dono ou admin pode adicionar membros' });
           }
 
@@ -2959,11 +3043,11 @@ export const appRouter = router({
           if (error) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: error.message });
           return { success: true };
         }),
-      removeMember: protectedProcedure
+      removeMember: guardedProcedure({ boardId: "board", userId: "user" })
         .input(z.object({ boardId: z.number(), userId: z.number() }))
         .mutation(async ({ ctx, input }) => {
-          const board = await getBoardById(input.boardId, ctx.user.id);
-          if (!board || (board.ownerId !== ctx.user.id && ctx.user.role !== 'admin')) {
+          const board = await getBoardById(input.boardId);
+          if (!board || (board.ownerId !== ctx.user.id && !isTenantAdmin(ctx.user))) {
             throw new TRPCError({ code: 'FORBIDDEN', message: 'Apenas o dono ou admin pode remover membros' });
           }
 
@@ -2976,21 +3060,28 @@ export const appRouter = router({
 
   // Statistics/Dashboard
   stats: router({
-    getGeneral: protectedProcedure.query(async () => {
-      const db = await getDb();
-      if (!db) return { totalBoards: 0, totalCards: 0, totalUsers: 0 };
-      
+    getGeneral: protectedProcedure.query(async ({ ctx }) => {
+      const zeros = { totalBoards: 0, totalCards: 0, totalUsers: 0 };
+      const isMaster = ctx.user.role === 'master_admin';
+      // Contagens sempre restritas ao tenant do usuário (master_admin vê o total).
+      if (!isMaster && !ctx.tenantId) return zeros;
+
       try {
-        // Evita crash/loop em ambientes onde o Drizzle/tenant pode falhar.
-        const [boardsCount] = await db.select({ count: z.any() as any }).from(boards);
-        const [cardsCount] = await db.select({ count: z.any() as any }).from(cards);
-        const [usersCount] = await db.select({ count: z.any() as any }).from(users);
-      
-        return {
-          totalBoards: Number(boardsCount?.count || 0),
-          totalCards: Number(cardsCount?.count || 0),
-          totalUsers: Number(usersCount?.count || 0),
+        const countOf = async (table: "boards" | "cards" | "users") => {
+          let query = supabase.from(table).select("id", { count: "exact", head: true });
+          if (!isMaster) query = query.eq("tenant_id", ctx.tenantId as string);
+          const { count, error } = await query;
+          if (error) throw error;
+          return count || 0;
         };
+
+        const [totalBoards, totalCards, totalUsers] = await Promise.all([
+          countOf("boards"),
+          countOf("cards"),
+          countOf("users"),
+        ]);
+
+        return { totalBoards, totalCards, totalUsers };
       } catch (err) {
         console.error("[Stats] getGeneral failed, using zeros:", err);
         return { totalBoards: 0, totalCards: 0, totalUsers: 0 };
@@ -3044,7 +3135,7 @@ export const appRouter = router({
         items: typeof t.items === 'string' ? JSON.parse(t.items) : t.items
       }));
     }),
-    applyTemplate: protectedProcedure
+    applyTemplate: guardedProcedure({ cardId: "card" })
       .input(z.object({
         cardId: z.number(),
         templateId: z.number(),
@@ -3166,11 +3257,11 @@ export const appRouter = router({
           "como gerenciar prazos": "Você pode definir 'Data de Início' e 'Data de Entrega' nos detalhes de cada cartão. O sistema alertará quando um prazo estiver próximo ou vencido.",
           "como usar etiquetas": "As etiquetas ajudam a categorizar cartões por cores e nomes. Você pode adicionar várias etiquetas a um único cartão para facilitar a filtragem visual.",
           "como funciona o checklist": "Você pode criar grupos de checklist dentro de um cartão para quebrar tarefas grandes em subtarefas menores e acompanhar o progresso através da barra de porcentagem.",
-          "privacidade e seguranca": "O Maju Tasks utiliza Supabase para garantir que seus dados estejam seguros. Você pode controlar quem vê seus quadros através do botão 'Compartilhar'.",
+          "privacidade e seguranca": "O DStasks utiliza Supabase para garantir que seus dados estejam seguros. Você pode controlar quem vê seus quadros através do botão 'Compartilhar'.",
           "como anexar arquivos": "Dentro de um cartão, utilize a seção 'Anexos' para fazer upload de documentos, imagens ou links relevantes para a tarefa.",
           "filtros de busca": "Você pode buscar por quadros e cartões específicos utilizando a barra de busca no topo da aplicação.",
-          "ola": "Olá! Eu sou o assistente Virtual D. Como posso ajudar você hoje com o Maju Tasks?",
-          "oi": "Olá! Eu sou o assistente Virtual D. Como posso ajudar você hoje com o Maju Tasks?",
+          "ola": "Olá! Eu sou o assistente Virtual D. Como posso ajudar você hoje com o DStasks?",
+          "oi": "Olá! Eu sou o assistente Virtual D. Como posso ajudar você hoje com o DStasks?",
           "ajuda": "Eu posso te ajudar com dúvidas sobre: criar quadros, listas, cartões, espelhamento, prazos, etiquetas, checklists e muito mais. O que você deseja saber?",
         };
 
@@ -3203,7 +3294,7 @@ export const appRouter = router({
         try {
           const systemPrompt: Message = {
             role: "system",
-            content: `Você é o assistente Virtual D. do aplicativo Maju Tasks, desenvolvido por Diogo Martins. 
+            content: `Você é o assistente Virtual D. do aplicativo DStasks, desenvolvido por Diogo Martins. 
             Seu objetivo é ajudar usuários com o funcionamento da aplicação. 
             ${input.shortResponse ? "Mantenha a resposta extremamente curta e direta ao ponto." : ""}
             ${input.useWebSearch ? "Se necessário, utilize informações recentes da web para responder." : ""}
@@ -3223,7 +3314,7 @@ export const appRouter = router({
           // Se o erro for de falta de chave, mas temos o openrouter configurado ou o fallback ativado
           if (error.message === "NO_API_KEY") {
              // Tenta uma mensagem amigável antes de desistir
-             return "Olá! No momento meu módulo de IA avançada está em repouso, mas posso te ajudar com o básico do Maju Tasks. Tente perguntar sobre 'como criar um quadro' ou 'espelhamento'!";
+             return "Olá! No momento meu módulo de IA avançada está em repouso, mas posso te ajudar com o básico do DStasks. Tente perguntar sobre 'como criar um quadro' ou 'espelhamento'!";
           }
           
           return "Desculpe, tive um problema ao processar sua pergunta agora. Você pode perguntar sobre o funcionamento básico do app!";

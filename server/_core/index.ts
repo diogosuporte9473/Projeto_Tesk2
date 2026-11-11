@@ -129,13 +129,22 @@ export async function createApp() {
     const origin = req.headers.origin;
     const host = req.headers.host;
     
-    // Permitir se o origin for igual ao host (same-origin)
-    if (origin && host && origin.includes(host)) {
+    // Permitir apenas se o host do Origin for EXATAMENTE o host da requisição
+    // (same-origin). Comparação por substring aceitaria "app.com.evil.net".
+    let originHost = "";
+    try {
+      originHost = origin ? new URL(origin).host : "";
+    } catch {
+      originHost = "";
+    }
+    if (originHost && host && originHost === host) {
       return next();
     }
 
-    // Permitir domínios da Vercel automaticamente se estivermos na Vercel
-    if (origin?.endsWith(".vercel.app")) {
+    // Deploys de preview da Vercel: apenas o domínio deste próprio deploy
+    // (VERCEL_URL), nunca qualquer *.vercel.app de terceiros.
+    const vercelHosts = [process.env.VERCEL_URL, process.env.VERCEL_BRANCH_URL].filter(Boolean);
+    if (originHost && vercelHosts.includes(originHost)) {
       return next();
     }
 

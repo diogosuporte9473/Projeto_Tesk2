@@ -49,7 +49,7 @@ export async function invokeLLM(options: LLMOptions) {
       "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`,
       "HTTP-Referer": "https://maju-tasks.vercel.app",
-      "X-Title": "Maju Task Manager",
+      "X-Title": "DStasks",
     },
     body: JSON.stringify({
       model: apiUrl.includes("openrouter") 
