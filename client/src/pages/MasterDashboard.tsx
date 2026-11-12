@@ -41,10 +41,10 @@ export default function MasterDashboard() {
 
   return (
     <TrelloDashboardLayout>
-      <div className="p-8 max-w-6xl mx-auto">
-        <div className="flex items-center justify-between mb-8">
+      <div className="p-4 sm:p-8 max-w-6xl mx-auto">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-6 sm:mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">Painel Master</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Painel Master</h1>
             <p className="text-muted-foreground">Gerenciamento global de empresas (tenants)</p>
           </div>
           <Button onClick={() => setShowNewForm(!showNewForm)} className="bg-accent text-accent-foreground">

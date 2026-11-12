@@ -623,7 +623,9 @@ export default function CardDetailModal({
           "overflow-y-auto bg-popover text-foreground border-border p-0 transition-all duration-500 ease-in-out flex flex-col",
           isMaximized 
             ? "max-w-[95vw] w-[min(1400px,95vw)] lg:min-w-[1000px] h-[94vh] rounded-2xl shadow-2xl" 
-            : "max-w-[1100px] w-[min(1100px,96vw)] lg:min-w-[850px] h-[92vh] lg:h-[88vh] rounded-xl shadow-xl"
+            : "max-w-[1100px] w-[min(1100px,96vw)] lg:min-w-[850px] h-[92vh] lg:h-[88vh] rounded-xl shadow-xl",
+          // Celular: o cartão ocupa a tela inteira.
+          "max-sm:h-[100dvh] max-sm:w-screen max-sm:max-w-none max-sm:rounded-none max-sm:border-0"
         )}
       >
         <div className="sr-only">
@@ -632,9 +634,9 @@ export default function CardDetailModal({
         </div>
 
         {/* Header */}
-        <DialogHeader className="p-3 px-5 border-b border-[var(--surface-border)]/60 bg-[var(--surface-3)] flex-shrink-0">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex-1 min-w-0">
+        <DialogHeader className="p-3 px-4 sm:px-5 border-b border-[var(--surface-border)]/60 bg-[var(--surface-3)] flex-shrink-0 text-left">
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+            <div className="w-full min-w-0 sm:w-auto sm:flex-1">
               {isEditingTitle ? (
                 <div className="flex items-center gap-2 mb-1">
                   <input
@@ -764,7 +766,7 @@ export default function CardDetailModal({
               </div>
             </div>
 
-              <div className="flex items-center gap-2 flex-shrink-0">
+              <div className="flex items-center justify-end gap-2 flex-shrink-0">
                 <Button 
                   variant="outline" 
                   size="sm" 
@@ -892,7 +894,7 @@ export default function CardDetailModal({
         {/* Main Content Area */}
         <div className={cn(
           "flex-1 overflow-y-auto custom-scrollbar transition-all duration-500",
-          isMaximized ? "p-6 px-10" : "p-5 px-6"
+          isMaximized ? "p-4 sm:p-6 sm:px-10" : "p-4 sm:p-5 sm:px-6"
         )}>
           <div className={cn(
             "grid gap-6",
@@ -1267,7 +1269,7 @@ export default function CardDetailModal({
 
                     return (
                       <section key={group.id} className="space-y-8 animate-in fade-in slide-in-from-top-4 duration-700">
-                        <div className="flex items-center justify-between gap-6 pb-2">
+                        <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 pb-2">
                           <div className="flex items-center gap-4 flex-1 min-w-0">
                             <div className="p-2.5 rounded-xl bg-accent/10 border border-accent/10">
                               <CheckSquare className="w-5 h-5 text-accent" />
@@ -1283,13 +1285,13 @@ export default function CardDetailModal({
                             ) : (
                               <h3 
                                 onClick={() => setEditingGroupId(group.id)}
-                                className="font-bold text-2xl text-foreground cursor-pointer hover:text-accent transition-all truncate tracking-tight"
+                                className="font-bold text-lg sm:text-2xl text-foreground cursor-pointer hover:text-accent transition-all truncate tracking-tight"
                               >
                                 {group.title}
                               </h3>
                             )}
                           </div>
-                          <div className="flex items-center gap-4">
+                          <div className="flex flex-wrap items-center gap-2 sm:gap-4">
                             <div className="text-xs font-semibold text-accent bg-accent/10 px-4 py-2 rounded-full border border-accent/20 shadow-sm shadow-accent/5">
                               {Math.round(groupProgress)}%
                             </div>
@@ -1396,7 +1398,7 @@ export default function CardDetailModal({
                                     />
                                   </div>
                                   <div className="flex-1 min-w-0 flex flex-col gap-3">
-                                    <div className="flex items-start justify-between gap-8">
+                                    <div className="flex items-start justify-between gap-3 sm:gap-8">
                                       <textarea
                                         defaultValue={item.title}
                                         onBlur={(e) => handleUpdateChecklistItem(item.id, { title: e.target.value })}

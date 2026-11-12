@@ -38,13 +38,13 @@ export default function Settings() {
     );
   }
 
-  const isAdmin = user.role === "admin";
+  const isAdmin = user.role === "admin" || user.role === "master_admin";
 
   return (
     <TrelloDashboardLayout>
-      <div className="p-8 max-w-4xl mx-auto">
-        <div className="mb-8 text-center sm:text-left">
-          <h1 className="text-3xl font-bold text-foreground mb-2">
+      <div className="p-4 sm:p-8 max-w-4xl mx-auto">
+        <div className="mb-6 sm:mb-8">
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">
             {isEnglish ? "Settings" : "Configurações"}
           </h1>
           <p className="text-muted-foreground">
@@ -53,7 +53,7 @@ export default function Settings() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className={`grid w-full ${isAdmin ? 'grid-cols-4' : 'grid-cols-2'} mb-8 h-auto flex-wrap gap-2 sm:gap-0 bg-transparent sm:bg-muted`}>
+          <TabsList className={`grid w-full grid-cols-2 ${isAdmin ? 'sm:grid-cols-4' : ''} mb-6 sm:mb-8 h-auto gap-1`}>
             <TabsTrigger value="profile" className="flex items-center gap-2 py-3">
               <User className="w-4 h-4" />
               {isEnglish ? "Profile" : "Perfil"}

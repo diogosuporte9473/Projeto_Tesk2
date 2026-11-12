@@ -299,3 +299,11 @@
     }
   }
 }
+/* Celular: campos com menos de 16px fazem o iOS dar zoom ao focar. */
+@media (max-width: 639px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}

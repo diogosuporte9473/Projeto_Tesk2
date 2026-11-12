@@ -17,8 +17,9 @@ import {
   DragOverlay,
   closestCorners,
   KeyboardSensor,
-  PointerSensor,
   useSensor,
+  MouseSensor,
+  TouchSensor,
   useSensors,
   useDroppable,
 } from "@dnd-kit/core";
@@ -100,9 +101,16 @@ export default function BoardView() {
   ]);
 
   const sensors = useSensors(
-    useSensor(PointerSensor, {
+    useSensor(MouseSensor, {
       activationConstraint: {
         distance: 8,
+      },
+    }),
+    // No celular: segurar o cartão para arrastar; deslizar continua rolando.
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        delay: 250,
+        tolerance: 8,
       },
     }),
     useSensor(KeyboardSensor, {
@@ -319,7 +327,7 @@ export default function BoardView() {
               className="h-7 w-7 flex-shrink-0 rounded-lg shadow-sm"
               style={{ background: `linear-gradient(135deg, ${board.color || "var(--primary)"}, ${board.color || "var(--primary)"}99)` }}
             />
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 flex-1 basis-[calc(100%-2.75rem)] sm:basis-0">
               {isEditingBoardName ? (
                 <input
                   type="text"
@@ -362,7 +370,7 @@ export default function BoardView() {
               </button>
             )}
 
-            <div className="flex items-center gap-1">
+            <div className="ml-auto flex items-center gap-1 sm:ml-0">
               <HeaderIconButton label={isEnglish ? "Recent activity" : "Últimas atividades"} onClick={() => setShowActivityModal(true)}>
                 <HistoryIcon className="h-4 w-4" />
               </HeaderIconButton>
@@ -406,8 +414,8 @@ export default function BoardView() {
 
           {/* Visualização + filtros */}
           {hasLists && (
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <div className="inline-flex h-8 items-center rounded-lg border border-input p-0.5" role="tablist" aria-label={isEnglish ? "View" : "Visualização"}>
+            <div className="-mx-4 mt-3 flex items-center gap-2 overflow-x-auto px-4 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 [&::-webkit-scrollbar]:hidden [&>*]:shrink-0">
+              <div className="inline-flex h-9 items-center rounded-lg border border-input p-0.5 sm:h-8" role="tablist" aria-label={isEnglish ? "View" : "Visualização"}>
                 {([
                   { key: "kanban", label: "Kanban", icon: Columns3 },
                   { key: "dashboard", label: isEnglish ? "Dashboard" : "Painel", icon: BarChart3 },
@@ -436,7 +444,7 @@ export default function BoardView() {
                   value={cardQuery}
                   onChange={(e) => setCardQuery(e.target.value)}
                   placeholder={isEnglish ? "Filter cards…" : "Filtrar cartões…"}
-                  className="h-8 w-56 rounded-lg border border-input bg-transparent pl-8 pr-2 text-[13px] outline-none transition placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/25"
+                  className="h-9 w-44 rounded-lg border border-input bg-transparent pl-8 pr-2 text-base outline-none sm:h-8 sm:w-56 sm:text-[13px] transition placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/25"
                 />
               </div>
               {filterChips.map((chip) => (
@@ -445,7 +453,7 @@ export default function BoardView() {
                   type="button"
                   onClick={() => setCardFilter(cardFilter === chip.key ? "all" : chip.key)}
                   className={cn(
-                    "inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-[13px] font-medium transition-colors",
+                    "inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg border px-2.5 text-[13px] font-medium transition-colors sm:h-8",
                     cardFilter === chip.key
                       ? "border-primary/50 bg-primary/12 text-foreground"
                       : "border-input text-muted-foreground hover:bg-foreground/[0.05] hover:text-foreground"
@@ -482,7 +490,7 @@ export default function BoardView() {
         )}
 
         {/* Colunas */}
-        <div className={cn("thin-scroll flex-1 overflow-x-auto overflow-y-hidden px-4 py-4 lg:px-6", view !== "kanban" && "hidden")}>
+        <div className={cn("thin-scroll flex-1 snap-x snap-mandatory scroll-px-4 overflow-x-auto overflow-y-hidden px-4 py-4 sm:snap-none lg:px-6", view !== "kanban" && "hidden")}>
           <DndContext
             sensors={sensors}
             collisionDetection={closestCorners}
@@ -1143,7 +1151,7 @@ function ListColumn({
     <div
       ref={setNodeRef}
       className={cn(
-        "flex max-h-full w-[292px] flex-shrink-0 flex-col rounded-2xl border border-[var(--surface-border)] bg-[var(--surface-1)] transition-colors",
+        "flex max-h-full w-[min(292px,calc(100vw-3.5rem))] flex-shrink-0 snap-start flex-col rounded-2xl border border-[var(--surface-border)] bg-[var(--surface-1)] transition-colors",
         isOver && "border-primary/50"
       )}
     >
