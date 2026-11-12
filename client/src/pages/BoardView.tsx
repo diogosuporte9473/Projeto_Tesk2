@@ -4,7 +4,7 @@ import { useRealtimeSync } from "@/_core/hooks/useRealtimeSync";
 import { trpc } from "@/lib/trpc";
 import TrelloDashboardLayout from "@/components/TrelloDashboardLayout";
 import { Button } from "@/components/ui/button";
-import { Plus, Loader2, MessageSquare, X, UserPlus, Users, Trash2, MoreHorizontal, Edit2, Archive, Settings2, AlignLeft, Tag, CheckSquare, Clock, LayoutGrid, Paperclip, History as HistoryIcon, Search, Sparkles, User as UserIcon, AlertCircle, CalendarClock, Columns3, Palette, BarChart3 } from "lucide-react";
+import { Plus, Loader2, MessageSquare, X, UserPlus, Users, Trash2, MoreHorizontal, Edit2, Archive, Settings2, AlignLeft, Tag, CheckSquare, Clock, LayoutGrid, Paperclip, History as HistoryIcon, Search, Sparkles, User as UserIcon, AlertCircle, CalendarClock, Columns3, Palette, BarChart3, Zap } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useState, useRef, useEffect, useMemo } from "react";
 import { formatDistanceToNow } from "date-fns";
@@ -32,6 +32,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { DraggableCard } from "@/components/DraggableCard";
 import BoardThemeDialog from "@/components/BoardThemeDialog";
 import BoardDashboard from "@/components/BoardDashboard";
+import AutomationsDialog from "@/components/AutomationsDialog";
 import { themeIcon } from "@/lib/themeIcons";
 import { getBoardTheme, type BoardSettings } from "@shared/boardThemes";
 import { AIChatBox, Message } from "@/components/AIChatBox";
@@ -92,6 +93,7 @@ export default function BoardView() {
   const [showArchivedModal, setShowArchivedModal] = useState(false);
   const [showMirrorSettings, setShowMirrorSettings] = useState(false);
   const [showThemeDialog, setShowThemeDialog] = useState(false);
+  const [showAutomations, setShowAutomations] = useState(false);
   const [view, setView] = useState<"kanban" | "dashboard">("kanban");
   const [messages, setMessages] = useState<Message[]>([
     { role: "system", content: "You are a helpful assistant for the DStasks. You can help users organize their tasks, suggest project steps, and answer questions about their boards." }
@@ -115,6 +117,23 @@ export default function BoardView() {
   const deleteBoardMutation = trpc.boards.delete.useMutation();
   const aiChatMutation = trpc.ai.chat.useMutation();
   const [, setLocation] = useLocation();
+  const runScheduledMutation = trpc.automations.runScheduled.useMutation();
+  useEffect(() => {
+    if (!boardId) return;
+    runScheduledMutation.mutate(
+      { boardId },
+      {
+        onSuccess: (result) => {
+          if (result.ran > 0) {
+            utils.cards.getByList.invalidate();
+            utils.notifications.list.invalidate();
+          }
+        },
+        onError: () => {},
+      }
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [boardId]);
 
   const [isEditingBoardName, setIsEditingBoardName] = useState(false);
   const [editedBoardName, setEditedBoardName] = useState("");
@@ -361,6 +380,9 @@ export default function BoardView() {
                     <DropdownMenuItem onClick={() => setShowThemeDialog(true)}>
                       <Palette className="h-4 w-4" /> {isEnglish ? "Customize theme" : "Personalizar tema"}
                     </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setShowAutomations(true)}>
+                      <Zap className="h-4 w-4" /> {isEnglish ? "Automations" : "Automações"}
+                    </DropdownMenuItem>
                     {isAdminLike && (
                       <DropdownMenuItem onClick={() => setShowMirrorSettings(true)}>
                         <Settings2 className="h-4 w-4" /> {isEnglish ? "Mirroring settings" : "Configurar espelhamento"}
@@ -566,6 +588,18 @@ export default function BoardView() {
             currentTheme={boardTheme.key}
             currentSettings={((board as any).settings || {}) as BoardSettings}
             existingLists={((lists as DBList[]) || []).map((list) => list.name)}
+          />
+        )}
+
+        {/* Automações */}
+        {boardId && showAutomations && (
+          <AutomationsDialog
+            isOpen={showAutomations}
+            onClose={() => setShowAutomations(false)}
+            boardId={boardId}
+            themeKey={boardTheme.key}
+            lists={((lists as DBList[]) || []).map((list) => list.name)}
+            canManage={isOwnerOrAdmin}
           />
         )}
 
