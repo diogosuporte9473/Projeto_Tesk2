@@ -4,9 +4,9 @@ import { useRealtimeSync } from "@/_core/hooks/useRealtimeSync";
 import { trpc } from "@/lib/trpc";
 import TrelloDashboardLayout from "@/components/TrelloDashboardLayout";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Plus, Loader2, MessageSquare, X, UserPlus, Users, Shield, Trash2, MoreHorizontal, Edit2, Archive, Settings2, AlignLeft, Tag, CheckSquare, Clock, LayoutGrid, Paperclip, History as HistoryIcon } from "lucide-react";
-import { useState, useRef, useEffect } from "react";
+import { Plus, Loader2, MessageSquare, X, UserPlus, Users, Trash2, MoreHorizontal, Edit2, Archive, Settings2, AlignLeft, Tag, CheckSquare, Clock, LayoutGrid, Paperclip, History as HistoryIcon, Search, Sparkles, User as UserIcon, AlertCircle, CalendarClock, Columns3 } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -49,6 +49,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 interface CardWithUser extends DBCard {
+  labels?: { id: number; label: string; color: string }[];
   assignedToName?: string | null;
   checklistCount?: number;
   completedChecklistCount?: number;
@@ -59,7 +60,6 @@ export default function BoardView() {
   const [, params] = useRoute("/board/:id");
   const boardId = params?.id ? parseInt(params.id) : null;
   const { user } = useAuth();
-  const isAdmin = user?.role === "admin";
   const { language } = useLanguage();
   const isEnglish = language === "en";
   
@@ -79,6 +79,9 @@ export default function BoardView() {
   const [newListName, setNewListName] = useState("");
   const [showNewList, setShowNewList] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [activeTitle, setActiveTitle] = useState("");
+  const [cardQuery, setCardQuery] = useState("");
+  const [cardFilter, setCardFilter] = useState<CardFilter>("all");
   const [showAIChat, setShowAIChat] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [showArchivedModal, setShowArchivedModal] = useState(false);
@@ -246,148 +249,225 @@ export default function BoardView() {
   if (!board) {
     return (
       <TrelloDashboardLayout>
-        <div className="p-8">
-          <p className="text-muted-foreground">Board not found</p>
+        <div className="flex h-full flex-col items-center justify-center gap-2 p-8 text-center">
+          <h1 className="text-lg font-semibold">{isEnglish ? "Board not found" : "Quadro não encontrado"}</h1>
+          <p className="text-sm text-muted-foreground">
+            {isEnglish ? "It may have been deleted or you no longer have access." : "Ele pode ter sido excluído ou você não tem mais acesso."}
+          </p>
+          <Button variant="outline" className="mt-3" onClick={() => setLocation("/")}>
+            {isEnglish ? "Back to home" : "Voltar ao início"}
+          </Button>
         </div>
       </TrelloDashboardLayout>
     );
   }
 
-  const isOwnerOrAdmin = user?.id === board.ownerId || user?.role === 'admin';
+  const isAdminLike = user?.role === "admin" || user?.role === "master_admin";
+  const isOwnerOrAdmin = user?.id === board.ownerId || isAdminLike;
+  const hasLists = !!lists && (lists as DBList[]).length > 0;
+  const filtering = cardQuery.trim() !== "" || cardFilter !== "all";
+
+  const filterChips: { key: CardFilter; label: string; icon: typeof UserIcon }[] = [
+    { key: "mine", label: isEnglish ? "Assigned to me" : "Minhas", icon: UserIcon },
+    { key: "overdue", label: isEnglish ? "Overdue" : "Atrasadas", icon: AlertCircle },
+    { key: "today", label: isEnglish ? "Due today" : "Para hoje", icon: CalendarClock },
+  ];
 
   return (
     <TrelloDashboardLayout>
-      <div className="h-full flex flex-col">
-        <BoardActivityModal 
-          isOpen={showActivityModal} 
-          onClose={() => setShowActivityModal(false)} 
+      <div className="flex h-full flex-col">
+        <BoardActivityModal
+          isOpen={showActivityModal}
+          onClose={() => setShowActivityModal(false)}
           boardName={board.name}
           logs={boardActivity?.logs || []}
           isLoading={logsLoading}
         />
-        <div className="p-6 flex justify-between items-start flex-shrink-0">
-          <div className="flex-1 min-w-0">
-            {isEditingBoardName ? (
-              <div className="flex items-center gap-2 mb-2">
+
+        {/* Cabeçalho do quadro */}
+        <header className="flex-shrink-0 border-b border-border px-4 pb-3 pt-4 lg:px-6">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <span
+              className="h-7 w-7 flex-shrink-0 rounded-lg shadow-sm"
+              style={{ background: `linear-gradient(135deg, ${board.color || "var(--primary)"}, ${board.color || "var(--primary)"}99)` }}
+            />
+            <div className="min-w-0 flex-1">
+              {isEditingBoardName ? (
                 <input
                   type="text"
                   value={editedBoardName}
                   onChange={(e) => setEditedBoardName(e.target.value)}
-                  className="text-3xl font-bold bg-transparent border-b-2 border-accent outline-none text-foreground w-full max-w-lg"
+                  className="w-full max-w-lg rounded-md border border-ring bg-transparent px-2 py-0.5 text-xl font-semibold text-foreground outline-none ring-2 ring-ring/30"
                   autoFocus
                   onBlur={handleUpdateBoardName}
-                  onKeyDown={(e) => e.key === "Enter" && handleUpdateBoardName()}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleUpdateBoardName();
+                    if (e.key === "Escape") {
+                      setEditedBoardName(board.name);
+                      setIsEditingBoardName(false);
+                    }
+                  }}
+                />
+              ) : (
+                <h1
+                  className="group inline-flex max-w-full cursor-text items-center gap-2 rounded-md px-1 text-xl font-semibold text-foreground hover:bg-foreground/[0.05]"
+                  onClick={() => setIsEditingBoardName(true)}
+                  title={isEnglish ? "Click to rename" : "Clique para renomear"}
+                >
+                  <span className="truncate">{board.name}</span>
+                  <Edit2 className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                </h1>
+              )}
+              {board.description && <p className="truncate px-1 text-[13px] text-muted-foreground">{board.description}</p>}
+            </div>
+
+            <div className="flex items-center gap-1">
+              <HeaderIconButton label={isEnglish ? "Recent activity" : "Últimas atividades"} onClick={() => setShowActivityModal(true)}>
+                <HistoryIcon className="h-4 w-4" />
+              </HeaderIconButton>
+              <HeaderIconButton label={isEnglish ? "Archived items" : "Itens arquivados"} onClick={() => setShowArchivedModal(true)}>
+                <Archive className="h-4 w-4" />
+              </HeaderIconButton>
+              {isAdminLike && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" aria-label={isEnglish ? "More" : "Mais opções"}>
+                      <MoreHorizontal className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56">
+                    <DropdownMenuItem onClick={() => setShowMirrorSettings(true)}>
+                      <Settings2 className="h-4 w-4" /> {isEnglish ? "Mirroring settings" : "Configurar espelhamento"}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleDeleteBoard} className="text-destructive focus:text-destructive">
+                      <Trash2 className="h-4 w-4" /> {isEnglish ? "Delete board" : "Excluir quadro"}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+              {isOwnerOrAdmin && (
+                <Button onClick={() => setShowShareModal(true)} size="sm" className="ml-1 h-8 gap-1.5">
+                  <UserPlus className="h-4 w-4" /> <span className="hidden sm:inline">{isEnglish ? "Share" : "Compartilhar"}</span>
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {/* Filtros */}
+          {hasLists && (
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  type="search"
+                  value={cardQuery}
+                  onChange={(e) => setCardQuery(e.target.value)}
+                  placeholder={isEnglish ? "Filter cards…" : "Filtrar cartões…"}
+                  className="h-8 w-56 rounded-lg border border-input bg-transparent pl-8 pr-2 text-[13px] outline-none transition placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/25"
                 />
               </div>
-            ) : (
-              <h1 
-                className="text-3xl font-bold text-foreground mb-2 cursor-pointer hover:text-accent transition-colors flex items-center gap-2 group"
-                onClick={() => setIsEditingBoardName(true)}
-              >
-                {board.name}
-                <Edit2 className="w-5 h-5 opacity-0 group-hover:opacity-100 transition-opacity" />
-              </h1>
-            )}
-            {board.description && (
-              <p className="text-muted-foreground">{board.description}</p>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            <Button 
-              onClick={() => (window as any).showBoardActivity?.()} 
-              variant="ghost" 
-              size="icon" 
-              className="text-muted-foreground hover:text-accent transition-all hover:bg-accent/10" 
-              title="Últimas Atividades"
-            >
-              <HistoryIcon className="w-4 h-4" />
-            </Button>
-            <Button onClick={() => setShowArchivedModal(true)} variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground" title="Itens Arquivados">
-              <Archive className="w-4 h-4" />
-            </Button>
-            {user?.role === 'admin' && (
-              <Button 
-                onClick={() => setShowMirrorSettings(true)} 
-                variant="ghost" 
-                size="icon" 
-                className="text-muted-foreground hover:text-accent" 
-                title="Configurações de Espelhamento"
-              >
-                <Settings2 className="w-4 h-4" />
-              </Button>
-            )}
-            {user?.role === 'admin' && (
-              <Button 
-                onClick={handleDeleteBoard} 
-                variant="ghost" 
-                size="icon" 
-                className="text-muted-foreground hover:text-red-500 hover:bg-red-500/10" 
-                title="Excluir Quadro"
-              >
-                <Trash2 className="w-4 h-4" />
-              </Button>
-            )}
-            {isOwnerOrAdmin && (
-              <Button onClick={() => setShowShareModal(true)} variant="outline" className="flex items-center gap-2">
-                <UserPlus className="w-4 h-4" /> Compartilhar
-              </Button>
-            )}
-          </div>
-        </div>
+              {filterChips.map((chip) => (
+                <button
+                  key={chip.key}
+                  type="button"
+                  onClick={() => setCardFilter(cardFilter === chip.key ? "all" : chip.key)}
+                  className={cn(
+                    "inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-[13px] font-medium transition-colors",
+                    cardFilter === chip.key
+                      ? "border-primary/50 bg-primary/12 text-foreground"
+                      : "border-input text-muted-foreground hover:bg-foreground/[0.05] hover:text-foreground"
+                  )}
+                >
+                  <chip.icon className="h-3.5 w-3.5" />
+                  {chip.label}
+                </button>
+              ))}
+              {filtering && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCardQuery("");
+                    setCardFilter("all");
+                  }}
+                  className="inline-flex h-8 items-center gap-1 rounded-lg px-2 text-[13px] text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-3.5 w-3.5" /> {isEnglish ? "Clear" : "Limpar"}
+                </button>
+              )}
+            </div>
+          )}
+        </header>
 
-        <div className="flex-1 overflow-x-auto overflow-y-hidden px-6 pb-6">
+        {/* Colunas */}
+        <div className="thin-scroll flex-1 overflow-x-auto overflow-y-hidden px-4 py-4 lg:px-6">
           <DndContext
             sensors={sensors}
             collisionDetection={closestCorners}
             onDragEnd={handleDragEnd}
+            onDragCancel={() => setActiveId(null)}
             onDragStart={(event) => {
               setActiveId(event.active.id as string);
+              setActiveTitle((event.active.data.current as any)?.title || "");
             }}
           >
-            <div className="flex gap-4 h-full items-start">
+            <div className="flex h-full items-start gap-3">
               {lists && (lists as DBList[]).map((list: DBList) => (
-                <ListColumn key={list.id} listId={list.id} listName={list.name} boardId={board.id} />
+                <ListColumn
+                  key={list.id}
+                  listId={list.id}
+                  listName={list.name}
+                  boardId={board.id}
+                  query={cardQuery}
+                  filter={cardFilter}
+                  currentUserName={user?.name || ""}
+                />
               ))}
 
               {showNewList ? (
-                <div className="flex-shrink-0 w-72 bg-card rounded-lg p-3 border border-border shadow-sm">
+                <div className="w-[292px] flex-shrink-0 rounded-2xl border border-[var(--surface-border)] bg-[var(--surface-1)] p-2.5">
                   <input
                     type="text"
-                    placeholder="Nome da lista..."
+                    placeholder={isEnglish ? "List name…" : "Nome da lista…"}
                     value={newListName}
                     onChange={(e) => setNewListName(e.target.value)}
-                    className="w-full px-3 py-2 rounded bg-background border border-border text-foreground placeholder-muted-foreground text-sm mb-2 focus:ring-1 focus:ring-accent outline-none"
+                    className="mb-2 h-9 w-full rounded-lg border border-input bg-[var(--surface-2)] px-3 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/25"
                     autoFocus
-                    onKeyDown={(e) => e.key === "Enter" && handleCreateList()}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleCreateList();
+                      if (e.key === "Escape") setShowNewList(false);
+                    }}
                   />
                   <div className="flex gap-2">
-                    <Button
-                      onClick={handleCreateList}
-                      disabled={createListMutation.isPending}
-                      size="sm"
-                      className="flex-1 bg-accent text-accent-foreground hover:bg-accent/90"
-                    >
-                      {isEnglish ? "Create List" : "Criar Lista"}
+                    <Button onClick={handleCreateList} disabled={createListMutation.isPending} size="sm" className="h-8">
+                      {isEnglish ? "Add list" : "Adicionar lista"}
                     </Button>
-                    <Button
-                      onClick={() => setShowNewList(false)}
-                      variant="ghost"
-                      size="sm"
-                      className="flex-1"
-                    >
+                    <Button onClick={() => setShowNewList(false)} variant="ghost" size="sm" className="h-8">
                       {isEnglish ? "Cancel" : "Cancelar"}
                     </Button>
                   </div>
                 </div>
+              ) : hasLists ? (
+                <button
+                  type="button"
+                  onClick={() => setShowNewList(true)}
+                  className="flex h-11 w-[292px] flex-shrink-0 items-center gap-2 rounded-2xl border border-dashed border-input px-3 text-[13px] font-medium text-muted-foreground transition-colors hover:border-primary/50 hover:bg-foreground/[0.03] hover:text-foreground"
+                >
+                  <Plus className="h-4 w-4" />
+                  {isEnglish ? "Add another list" : "Adicionar outra lista"}
+                </button>
               ) : (
-                <div className="flex-shrink-0 w-72">
-                  <Button
-                    onClick={() => setShowNewList(true)}
-                    variant="outline"
-                    className="w-full justify-start bg-background/50 border-dashed border-2 hover:bg-background hover:border-accent text-muted-foreground hover:text-foreground h-12 transition-all"
-                  >
-                    <Plus className="w-4 h-4 mr-2" />
-                    {isEnglish ? "Add another list" : "Adicionar outra lista"}
+                <div className="mx-auto mt-16 flex max-w-sm flex-col items-center text-center">
+                  <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/12 text-primary">
+                    <Columns3 className="h-7 w-7" />
+                  </div>
+                  <h2 className="text-lg font-semibold">{isEnglish ? "This board is empty" : "Este quadro está vazio"}</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {isEnglish
+                      ? "Create lists for each stage of the work, such as To do, Doing and Done."
+                      : "Crie listas para cada etapa do trabalho, como A fazer, Em andamento e Concluído."}
+                  </p>
+                  <Button onClick={() => setShowNewList(true)} className="mt-5 gap-1.5">
+                    <Plus className="h-4 w-4" /> {isEnglish ? "Create first list" : "Criar primeira lista"}
                   </Button>
                 </div>
               )}
@@ -395,9 +475,9 @@ export default function BoardView() {
 
             <DragOverlay>
               {activeId && activeId.startsWith("card-") ? (
-                <div className="bg-card rounded p-3 border border-border shadow-2xl rotate-3 cursor-grabbing w-64">
-                  <p className="font-medium text-sm text-foreground">
-                    {isEnglish ? "Moving card..." : "Movendo cartão..."}
+                <div className="w-[272px] rotate-2 cursor-grabbing rounded-xl border border-primary/50 bg-[var(--surface-2)] p-3 shadow-[var(--shadow-pop)]">
+                  <p className="text-[13.5px] font-medium text-foreground">
+                    {activeTitle || (isEnglish ? "Moving card…" : "Movendo cartão…")}
                   </p>
                 </div>
               ) : null}
@@ -407,16 +487,16 @@ export default function BoardView() {
 
         {/* Share Modal */}
         {boardId && (
-          <ShareModal 
-            isOpen={showShareModal} 
-            onClose={() => setShowShareModal(false)} 
-            boardId={boardId} 
-            isAdmin={isAdmin}
+          <ShareModal
+            isOpen={showShareModal}
+            onClose={() => setShowShareModal(false)}
+            boardId={boardId}
+            isAdmin={isAdminLike}
           />
         )}
 
         {/* Mirror Settings Modal */}
-        {boardId && (
+        {boardId && showMirrorSettings && (
           <MirrorSettingsModal
             isOpen={showMirrorSettings}
             onClose={() => setShowMirrorSettings(false)}
@@ -425,7 +505,7 @@ export default function BoardView() {
         )}
 
         {/* Archived Cards Modal */}
-        {boardId && (
+        {boardId && showArchivedModal && (
           <ArchivedCardsModal
             isOpen={showArchivedModal}
             onClose={() => setShowArchivedModal(false)}
@@ -433,43 +513,58 @@ export default function BoardView() {
           />
         )}
 
-        {/* AI Chat Button */}
-        <div className="fixed bottom-8 right-8 z-50">
+        {/* Assistente de IA */}
+        <div className="fixed bottom-5 right-5 z-40">
           {showAIChat ? (
-            <div className="w-96 h-[500px] shadow-2xl transition-all duration-300 transform scale-100 opacity-100 origin-bottom-right">
-              <div className="bg-primary text-primary-foreground p-3 rounded-t-lg flex items-center justify-between border-b border-primary-foreground/10">
-                <div className="flex items-center gap-2">
-                  <MessageSquare className="w-4 h-4" />
-                  <span className="font-semibold">Maju IA</span>
+            <div className="flex h-[min(520px,calc(100vh-6rem))] w-[min(384px,calc(100vw-2.5rem))] origin-bottom-right flex-col overflow-hidden rounded-2xl border border-border bg-popover shadow-[var(--shadow-pop)]">
+              <div className="flex items-center justify-between border-b border-border px-3 py-2.5">
+                <div className="flex items-center gap-2 text-sm font-semibold">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-secondary text-white">
+                    <Sparkles className="h-4 w-4" />
+                  </span>
+                  {isEnglish ? "AI assistant" : "Assistente IA"}
                 </div>
-                <Button 
-                  onClick={() => setShowAIChat(false)} 
-                  variant="ghost" 
-                  size="icon-sm"
-                  className="hover:bg-primary-foreground/10 text-primary-foreground"
-                >
-                  <X className="w-4 h-4" />
+                <Button onClick={() => setShowAIChat(false)} variant="ghost" size="icon" className="h-8 w-8" aria-label={isEnglish ? "Close" : "Fechar"}>
+                  <X className="h-4 w-4" />
                 </Button>
               </div>
-              <AIChatBox 
+              <AIChatBox
                 messages={messages}
                 onSendMessage={handleSendMessage}
                 isLoading={aiChatMutation.isPending}
                 height="100%"
-                className="rounded-t-none border-t-0"
+                className="min-h-0 flex-1 rounded-none border-0"
               />
             </div>
           ) : (
-            <Button
+            <button
+              type="button"
               onClick={() => setShowAIChat(true)}
-              className="w-14 h-14 rounded-full bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg flex items-center justify-center transition-all hover:scale-110 active:scale-95"
+              className="flex h-12 items-center gap-2 rounded-full bg-gradient-to-br from-primary to-secondary px-4 text-sm font-semibold text-white shadow-[var(--shadow-pop)] transition-transform hover:scale-105 active:scale-95"
+              aria-label={isEnglish ? "Open AI assistant" : "Abrir assistente de IA"}
             >
-              <MessageSquare className="w-6 h-6" />
-            </Button>
+              <Sparkles className="h-4 w-4" />
+              <span className="hidden sm:inline">{isEnglish ? "Ask AI" : "Perguntar à IA"}</span>
+            </button>
           )}
         </div>
       </div>
     </TrelloDashboardLayout>
+  );
+}
+
+type CardFilter = "all" | "mine" | "overdue" | "today";
+
+function HeaderIconButton({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button onClick={onClick} variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" aria-label={label}>
+          {children}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -506,13 +601,13 @@ function MirrorSettingsModal({ isOpen, onClose, boardId }: { isOpen: boolean; on
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="bg-[var(--surface-1)] text-white border-[var(--surface-border)] max-w-md" aria-describedby={undefined}>
+      <DialogContent className="bg-popover text-foreground border-border max-w-md" aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle className="text-xl font-bold flex items-center gap-2">
             <Settings2 className="w-5 h-5 text-accent" />
             Configurações de Espelhamento
           </DialogTitle>
-          <DialogDescription className="text-gray-400 text-sm">
+          <DialogDescription className="text-muted-foreground text-sm">
             Defina quais atributos serão sincronizados quando um cartão deste quadro for espelhado.
           </DialogDescription>
         </DialogHeader>
@@ -535,8 +630,8 @@ function MirrorSettingsModal({ isOpen, onClose, boardId }: { isOpen: boolean; on
               ].map((item) => (
                 <div key={item.key} className="flex items-center justify-between p-3 rounded-lg bg-[var(--surface-3)] border border-[var(--surface-border)] hover:border-accent/30 transition-all">
                   <div className="flex items-center gap-3">
-                    <item.icon className="w-4 h-4 text-gray-400" />
-                    <span className="text-sm font-medium text-gray-200">{item.label}</span>
+                    <item.icon className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-sm font-medium text-foreground">{item.label}</span>
                   </div>
                   <Switch 
                     checked={(settings as any)?.[item.key]} 
@@ -606,7 +701,7 @@ function ShareModal({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent 
         aria-describedby={undefined}
-        className="max-w-md bg-background border-border"
+        className="max-w-md bg-popover border-border"
       >
         <DialogHeader>
           <DialogTitle>Compartilhar Quadro</DialogTitle>
@@ -646,7 +741,7 @@ function ShareModal({
                     <span className="text-sm font-medium">{u.name || u.username}</span>
                     <span className="text-xs text-muted-foreground">{u.username}</span>
                   </div>
-                  <Button size="sm" onClick={() => handleAddMember(u.id)} className="bg-accent hover:bg-accent/90">
+                  <Button size="sm" onClick={() => handleAddMember(u.id)} className="bg-primary text-primary-foreground hover:bg-primary/90">
                     Convidar
                   </Button>
                 </div>
@@ -692,7 +787,7 @@ function ArchivedCardsModal({ isOpen, onClose, boardId }: { isOpen: boolean, onC
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent 
         aria-describedby={undefined}
-        className="max-w-2xl bg-[var(--surface-1)] border-[var(--surface-border)] text-white"
+        className="max-w-2xl bg-popover border-border text-foreground"
       >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -706,13 +801,13 @@ function ArchivedCardsModal({ isOpen, onClose, boardId }: { isOpen: boolean, onC
               <Loader2 className="w-8 h-8 animate-spin text-accent" />
             </div>
           ) : archivedCards?.length === 0 ? (
-            <p className="text-center py-8 text-gray-500 text-sm">Nenhum cartão arquivado neste quadro.</p>
+            <p className="text-center py-8 text-muted-foreground text-sm">Nenhum cartão arquivado neste quadro.</p>
           ) : (
             archivedCards?.map((card: any) => (
               <div key={card.id} className="flex items-center justify-between p-4 rounded-xl bg-[var(--surface-3)] border border-[var(--surface-border)] group hover:border-accent/30 transition-all">
                 <div className="flex-1 min-w-0">
-                  <h4 className="font-bold text-sm text-gray-200 truncate">{card.title}</h4>
-                  <p className="text-[10px] text-gray-500 mt-1">Arquivado em: {new Date(card.updated_at).toLocaleDateString()}</p>
+                  <h4 className="font-bold text-sm text-foreground truncate">{card.title}</h4>
+                  <p className="text-[10px] text-muted-foreground mt-1">Arquivado em: {new Date(card.updated_at).toLocaleDateString()}</p>
                 </div>
                 <div className="flex items-center gap-2">
                   <Button 
@@ -727,7 +822,7 @@ function ArchivedCardsModal({ isOpen, onClose, boardId }: { isOpen: boolean, onC
                     variant="ghost" 
                     size="icon" 
                     onClick={() => handleDelete(card.id)}
-                    className="h-8 w-8 text-gray-500 hover:text-red-400 hover:bg-red-400/10"
+                    className="h-8 w-8 text-muted-foreground hover:text-red-400 hover:bg-red-400/10"
                   >
                     <Trash2 className="w-4 h-4" />
                   </Button>
@@ -746,7 +841,7 @@ function BoardActivityModal({ isOpen, onClose, boardName, logs, isLoading }: { i
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent 
         aria-describedby={undefined}
-        className="max-w-2xl bg-[var(--surface-1)] border-[var(--surface-border)] text-white"
+        className="max-w-2xl bg-popover border-border text-foreground"
       >
         <DialogHeader>
           <div className="flex items-center justify-between pr-8">
@@ -754,11 +849,11 @@ function BoardActivityModal({ isOpen, onClose, boardName, logs, isLoading }: { i
               <HistoryIcon className="w-5 h-5 text-accent" />
               Atividades do Quadro
             </DialogTitle>
-            <span className="text-[10px] font-black uppercase tracking-widest px-2 py-1 bg-accent/10 text-accent rounded border border-accent/20">
+            <span className="text-[10px] font-semibold uppercase tracking-widest px-2 py-1 bg-accent/10 text-accent rounded border border-accent/20">
               {boardName}
             </span>
           </div>
-          <DialogDescription className="text-gray-500 text-xs mt-1">
+          <DialogDescription className="text-muted-foreground text-xs mt-1">
             Histórico recente de ações realizadas neste quadro.
           </DialogDescription>
         </DialogHeader>
@@ -767,38 +862,38 @@ function BoardActivityModal({ isOpen, onClose, boardName, logs, isLoading }: { i
           {isLoading ? (
             <div className="flex flex-col items-center justify-center py-20 gap-4">
               <Loader2 className="w-10 h-10 animate-spin text-accent/50" />
-              <p className="text-xs text-gray-500 font-medium animate-pulse uppercase tracking-widest">Carregando atividades...</p>
+              <p className="text-xs text-muted-foreground font-medium animate-pulse uppercase tracking-widest">Carregando atividades...</p>
             </div>
           ) : logs.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-center gap-3">
               <div className="w-16 h-16 rounded-full bg-[var(--surface-3)] flex items-center justify-center border border-[var(--surface-border)]">
-                <Clock className="w-8 h-8 text-gray-600" />
+                <Clock className="w-8 h-8 text-muted-foreground" />
               </div>
               <div>
-                <p className="text-sm font-bold text-gray-400 uppercase tracking-tight">Nenhuma atividade recente</p>
-                <p className="text-[10px] text-gray-600 uppercase font-black tracking-widest mt-1">Os logs aparecerão aqui conforme as ações ocorrerem.</p>
+                <p className="text-sm font-bold text-muted-foreground uppercase tracking-tight">Nenhuma atividade recente</p>
+                <p className="text-[10px] text-muted-foreground uppercase font-semibold tracking-widest mt-1">Os logs aparecerão aqui conforme as ações ocorrerem.</p>
               </div>
             </div>
           ) : (
             logs?.map((log: any) => (
               <div key={log.id} className="flex gap-4 p-4 rounded-2xl bg-[var(--surface-3)]/50 border border-[var(--surface-border)] hover:border-accent/20 transition-all group">
                 <div className="flex-shrink-0">
-                  <div className="w-10 h-10 rounded-xl bg-accent/10 border border-accent/20 flex items-center justify-center text-accent text-xs font-black uppercase tracking-tighter shadow-inner group-hover:bg-accent group-hover:text-white transition-all duration-300">
+                  <div className="w-10 h-10 rounded-xl bg-accent/10 border border-accent/20 flex items-center justify-center text-accent text-xs font-semibold uppercase tracking-tighter shadow-inner group-hover:bg-accent group-hover:text-accent-foreground transition-all duration-300">
                     {log.users?.name?.substring(0, 2) || "S"}
                   </div>
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between mb-1">
-                    <p className="text-xs font-black text-gray-200 group-hover:text-white transition-colors">
+                    <p className="text-xs font-semibold text-foreground group-hover:text-foreground transition-colors">
                       {log.users?.name || "Sistema"}
                     </p>
-                    <span className="text-[10px] text-gray-500 font-black uppercase tracking-widest whitespace-nowrap bg-[var(--surface-1)] px-2 py-0.5 rounded border border-[var(--surface-border)]">
+                    <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-widest whitespace-nowrap bg-[var(--surface-1)] px-2 py-0.5 rounded border border-[var(--surface-border)]">
                       {formatDistanceToNow(new Date(log.created_at), { addSuffix: true, locale: ptBR })}
                     </span>
                   </div>
                   <div className="flex items-center gap-2 mb-2">
                     <span className={cn(
-                      "px-1.5 py-0.5 rounded-[4px] text-[9px] font-black uppercase tracking-[0.1em] border",
+                      "px-1.5 py-0.5 rounded-[4px] text-[9px] font-semibold uppercase tracking-[0.1em] border",
                       log.action === 'create' && "bg-green-500/10 text-green-500 border-green-500/20",
                       log.action === 'update' && "bg-blue-500/10 text-blue-500 border-blue-500/20",
                       log.action === 'delete' && "bg-red-500/10 text-red-500 border-red-500/20",
@@ -807,11 +902,11 @@ function BoardActivityModal({ isOpen, onClose, boardName, logs, isLoading }: { i
                     )}>
                       {log.action}
                     </span>
-                    <span className="text-[10px] text-gray-400 font-bold uppercase tracking-tighter truncate">
+                    <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-tighter truncate">
                       {log.entity_type}: {log.entity_name}
                     </span>
                   </div>
-                  <p className="text-[11px] text-gray-500 italic line-clamp-2 leading-relaxed font-medium border-l-2 border-[var(--surface-border)] pl-3 py-1 group-hover:border-accent/40 group-hover:text-gray-400 transition-all">
+                  <p className="text-[11px] text-muted-foreground italic line-clamp-2 leading-relaxed font-medium border-l-2 border-[var(--surface-border)] pl-3 py-1 group-hover:border-accent/40 group-hover:text-foreground/80 transition-all">
                     {log.details}
                   </p>
                 </div>
@@ -824,7 +919,21 @@ function BoardActivityModal({ isOpen, onClose, boardName, logs, isLoading }: { i
   );
 }
 
-function ListColumn({ listId, listName, boardId }: { listId: number; listName: string; boardId: number }) {
+function ListColumn({
+  listId,
+  listName,
+  boardId,
+  query,
+  filter,
+  currentUserName,
+}: {
+  listId: number;
+  listName: string;
+  boardId: number;
+  query: string;
+  filter: CardFilter;
+  currentUserName: string;
+}) {
   const { data: cards, isLoading } = trpc.cards.getByList.useQuery({ listId });
   const utils = trpc.useUtils();
   const deleteListMutation = trpc.lists.delete.useMutation();
@@ -839,19 +948,41 @@ function ListColumn({ listId, listName, boardId }: { listId: number; listName: s
   const [showNewCard, setShowNewCard] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const { setNodeRef } = useDroppable({ id: `list-${listId}` });
+  const { setNodeRef, isOver } = useDroppable({ id: `list-${listId}` });
+
+  const allCards = (cards as CardWithUser[] | undefined) || [];
+  const visibleCards = useMemo(() => {
+    const text = query.trim().toLowerCase();
+    const now = new Date();
+    return allCards.filter((card) => {
+      if (text) {
+        const haystack = `${card.title} ${card.description || ""} ${(card.labels || []).map((l) => l.label).join(" ")} ${card.assignedToName || ""}`.toLowerCase();
+        if (!haystack.includes(text)) return false;
+      }
+      if (filter === "mine") return !!currentUserName && card.assignedToName === currentUserName;
+      if (filter === "overdue" || filter === "today") {
+        if (!card.dueDate) return false;
+        const due = new Date(card.dueDate);
+        const sameDay = due.toDateString() === now.toDateString();
+        return filter === "today" ? sameDay : due < now && !sameDay;
+      }
+      return true;
+    });
+  }, [allCards, query, filter, currentUserName]);
+  const isFiltered = visibleCards.length !== allCards.length;
 
   // Virtualizador para os cartões
   const rowVirtualizer = useVirtualizer({
-    count: cards?.length || 0,
+    count: visibleCards.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: () => 100, // Altura estimada do card
+    estimateSize: () => 96, // Altura estimada do card
     overscan: 5,
   });
 
   useEffect(() => {
     if (isEditingName && inputRef.current) {
       inputRef.current.focus();
+      inputRef.current.select();
     }
   }, [isEditingName]);
 
@@ -882,96 +1013,123 @@ function ListColumn({ listId, listName, boardId }: { listId: number; listName: s
   };
 
   const handleCreateCard = async () => {
-    if (!newCardTitle.trim()) return;
+    if (!newCardTitle.trim() || createCardMutation.isPending) return;
     try {
       await createCardMutation.mutateAsync({
         listId,
-        title: newCardTitle,
+        title: newCardTitle.trim(),
       });
+      // Mantém o formulário aberto para criar vários cartões em sequência.
       setNewCardTitle("");
-      setShowNewCard(false);
       utils.cards.getByList.invalidate({ listId });
     } catch (error) {
-      console.error("Error creating card:", error);
+      toast.error(isEnglish ? "Could not create the card" : "Não foi possível criar o cartão");
     }
   };
 
-  const cardIds = (cards as DBCard[])?.map((card: DBCard) => `card-${card.id}-${listId}`) || [];
+  const cardIds = visibleCards.map((card) => `card-${card.id}-${listId}`);
 
   return (
-    <div 
+    <div
       ref={setNodeRef}
-      className="flex-shrink-0 w-72 bg-[var(--surface-1)] rounded-lg flex flex-col max-h-full border border-[var(--surface-border)] shadow-lg"
+      className={cn(
+        "flex max-h-full w-[292px] flex-shrink-0 flex-col rounded-2xl border border-[var(--surface-border)] bg-[var(--surface-1)] transition-colors",
+        isOver && "border-primary/50"
+      )}
     >
-      <div className="p-3 flex items-center justify-between group/list bg-[var(--surface-3)] rounded-t-lg border-b border-[var(--surface-border)]">
+      <div className="flex items-center gap-1 px-2.5 pb-1 pt-2.5">
         {isEditingName ? (
           <input
             ref={inputRef}
             value={editedName}
             onChange={(e) => setEditedName(e.target.value)}
             onBlur={handleUpdateName}
-            onKeyDown={(e) => e.key === "Enter" && handleUpdateName()}
-            className="bg-[var(--surface-2)] text-white text-sm font-semibold px-2 py-1 rounded w-full outline-none ring-1 ring-accent"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleUpdateName();
+              if (e.key === "Escape") {
+                setEditedName(listName);
+                setIsEditingName(false);
+              }
+            }}
+            className="h-7 w-full rounded-md border border-ring bg-[var(--surface-2)] px-2 text-sm font-semibold text-foreground outline-none ring-2 ring-ring/25"
           />
         ) : (
-          <h2 
+          <button
+            type="button"
             onClick={() => setIsEditingName(true)}
-            className="text-sm font-semibold text-white px-2 py-1 cursor-pointer hover:bg-[var(--surface-2)] rounded flex-1 truncate uppercase tracking-tight"
+            className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1.5 py-1 text-left hover:bg-foreground/[0.05]"
+            title={isEnglish ? "Click to rename" : "Clique para renomear"}
           >
-            {listName}
-          </h2>
+            <h2 className="truncate text-sm font-semibold text-foreground">{listName}</h2>
+            <span className="flex-shrink-0 rounded-full bg-foreground/[0.08] px-1.5 text-[11px] font-semibold leading-5 text-muted-foreground">
+              {isFiltered ? `${visibleCards.length}/${allCards.length}` : allCards.length}
+            </span>
+          </button>
         )}
 
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setShowNewCard(true)}
+          className="h-7 w-7 flex-shrink-0 text-muted-foreground hover:text-foreground"
+          aria-label={isEnglish ? "Add a card" : "Adicionar um cartão"}
+        >
+          <Plus className="h-4 w-4" />
+        </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="w-8 h-8 text-gray-400 hover:text-white hover:bg-white/10">
-              <MoreHorizontal className="w-4 h-4" />
+            <Button variant="ghost" size="icon" className="h-7 w-7 flex-shrink-0 text-muted-foreground hover:text-foreground" aria-label={isEnglish ? "List options" : "Opções da lista"}>
+              <MoreHorizontal className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="bg-[var(--surface-1)] border-[var(--surface-border)] text-white">
-            <DropdownMenuItem onClick={() => setIsEditingName(true)} className="flex items-center gap-2 cursor-pointer hover:bg-[var(--surface-2)]">
-              <Edit2 className="w-4 h-4" /> Renomear
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => setIsEditingName(true)}>
+              <Edit2 className="h-4 w-4" /> {isEnglish ? "Rename" : "Renomear"}
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={handleDeleteList} className="flex items-center gap-2 text-red-400 cursor-pointer focus:text-red-400 focus:bg-red-400/10">
-              <Trash2 className="w-4 h-4" /> Excluir Lista
+            <DropdownMenuItem onClick={handleDeleteList} className="text-destructive focus:text-destructive">
+              <Trash2 className="h-4 w-4" /> {isEnglish ? "Delete list" : "Excluir lista"}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
 
-      <div 
-        ref={scrollRef}
-        className="flex-1 overflow-y-auto p-2 min-h-[100px] scrollbar-thin scrollbar-thumb-white/10 hover:scrollbar-thumb-white/20"
-      >
-        <div 
-          style={{
-            height: `${rowVirtualizer.getTotalSize()}px`,
-            width: '100%',
-            position: 'relative',
-          }}
-        >
-          <SortableContext items={cardIds} strategy={verticalListSortingStrategy}>
-            {isLoading ? (
-              <div className="space-y-2">
-                {[1, 2, 3].map((i) => (
-                  <div key={i} className="h-20 bg-card/50 rounded animate-pulse" />
-                ))}
-              </div>
-            ) : (
-              rowVirtualizer.getVirtualItems().map((virtualRow) => {
-                const card = (cards as CardWithUser[])[virtualRow.index];
+      <div ref={scrollRef} className="thin-scroll min-h-[12px] flex-1 overflow-y-auto px-2 pt-1">
+        {isLoading ? (
+          <div className="space-y-2 pb-2">
+            {[1, 2].map((i) => (
+              <div key={i} className="h-16 animate-pulse rounded-xl bg-foreground/[0.06]" />
+            ))}
+          </div>
+        ) : visibleCards.length === 0 && !showNewCard ? (
+          <p className="px-2 pb-3 pt-1 text-xs text-muted-foreground">
+            {isFiltered
+              ? isEnglish ? "No cards match the filter." : "Nenhum cartão corresponde ao filtro."
+              : isEnglish ? "No cards yet." : "Nenhum cartão ainda."}
+          </p>
+        ) : (
+          <div
+            style={{
+              height: `${rowVirtualizer.getTotalSize()}px`,
+              width: "100%",
+              position: "relative",
+            }}
+          >
+            <SortableContext items={cardIds} strategy={verticalListSortingStrategy}>
+              {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                const card = visibleCards[virtualRow.index];
+                if (!card) return null;
                 return (
                   <div
                     key={card.id}
                     data-index={virtualRow.index}
                     ref={rowVirtualizer.measureElement}
                     style={{
-                      position: 'absolute',
+                      position: "absolute",
                       top: 0,
                       left: 0,
-                      width: '100%',
+                      width: "100%",
                       transform: `translateY(${virtualRow.start}px)`,
-                      paddingBottom: '8px' // Espaçamento entre cards
+                      paddingBottom: "8px", // Espaçamento entre cards
                     }}
                   >
                     <DraggableCard
@@ -991,43 +1149,48 @@ function ListColumn({ listId, listName, boardId }: { listId: number; listName: s
                     />
                   </div>
                 );
-              })
-            )}
-          </SortableContext>
-        </div>
+              })}
+            </SortableContext>
+          </div>
+        )}
       </div>
 
-      <div className="p-2 border-t border-[var(--surface-border)] bg-[var(--surface-3)]/30 rounded-b-lg">
+      <div className="p-2 pt-1">
         {showNewCard ? (
-          <div className="p-2 bg-[var(--surface-2)] rounded border border-[var(--surface-border)] shadow-sm">
+          <div>
             <textarea
-              placeholder="Digite o título do cartão..."
+              placeholder={isEnglish ? "Card title…" : "Título do cartão…"}
               value={newCardTitle}
               onChange={(e) => setNewCardTitle(e.target.value)}
-              className="w-full bg-[var(--surface-1)] border border-[var(--surface-border)] rounded p-2 text-sm text-white placeholder-gray-500 resize-none focus:ring-1 focus:ring-accent outline-none mb-2"
-              rows={3}
+              className="mb-2 w-full resize-none rounded-xl border border-ring bg-[var(--surface-2)] p-2.5 text-[13.5px] text-foreground outline-none ring-2 ring-ring/25 placeholder:text-muted-foreground"
+              rows={2}
               autoFocus
-              onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), handleCreateCard())}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleCreateCard();
+                }
+                if (e.key === "Escape") setShowNewCard(false);
+              }}
             />
-            <div className="flex gap-2">
-              <Button onClick={handleCreateCard} size="sm" className="bg-accent text-accent-foreground hover:bg-accent/90">
-                {isEnglish ? "Add" : "Adicionar"}
+            <div className="flex items-center gap-2">
+              <Button onClick={handleCreateCard} disabled={createCardMutation.isPending} size="sm" className="h-8">
+                {isEnglish ? "Add card" : "Adicionar"}
               </Button>
-              <Button onClick={() => setShowNewCard(false)} variant="ghost" size="sm" className="text-gray-400 hover:text-white">
-                {isEnglish ? "Cancel" : "Cancelar"}
+              <Button onClick={() => setShowNewCard(false)} variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground" aria-label={isEnglish ? "Cancel" : "Cancelar"}>
+                <X className="h-4 w-4" />
               </Button>
             </div>
           </div>
         ) : (
-          <Button
+          <button
+            type="button"
             onClick={() => setShowNewCard(true)}
-            variant="ghost"
-            size="sm"
-            className="w-full justify-start text-gray-400 hover:text-white hover:bg-white/5 h-10"
+            className="flex h-9 w-full items-center gap-2 rounded-lg px-2 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground"
           >
-            <Plus className="w-4 h-4 mr-2" />
+            <Plus className="h-4 w-4" />
             {isEnglish ? "Add a card" : "Adicionar um cartão"}
-          </Button>
+          </button>
         )}
       </div>
     </div>

@@ -619,10 +619,10 @@ export default function CardDetailModal({
       <DialogContent 
         showCloseButton={false}
         className={cn(
-          "overflow-y-auto bg-[var(--surface-1)] text-white border-[var(--surface-border)] p-0 transition-all duration-500 ease-in-out flex flex-col",
+          "overflow-y-auto bg-popover text-foreground border-border p-0 transition-all duration-500 ease-in-out flex flex-col",
           isMaximized 
-            ? "max-w-[95vw] w-[min(1400px,95vw)] min-w-[1000px] h-[94vh] rounded-2xl shadow-2xl" 
-            : "max-w-[1100px] w-[min(1100px,92vw)] min-w-[850px] h-[88vh] rounded-xl shadow-xl"
+            ? "max-w-[95vw] w-[min(1400px,95vw)] lg:min-w-[1000px] h-[94vh] rounded-2xl shadow-2xl" 
+            : "max-w-[1100px] w-[min(1100px,96vw)] lg:min-w-[850px] h-[92vh] lg:h-[88vh] rounded-xl shadow-xl"
         )}
       >
         <div className="sr-only">
@@ -640,7 +640,7 @@ export default function CardDetailModal({
                     type="text"
                     value={editedTitle}
                     onChange={(e) => setEditedTitle(e.target.value)}
-                    className="text-xl font-bold bg-[var(--surface-2)] border-b-2 border-accent outline-none text-white w-full px-2 py-1 rounded shadow-inner"
+                    className="text-xl font-bold bg-[var(--surface-2)] border-b-2 border-accent outline-none text-foreground w-full px-2 py-1 rounded shadow-inner"
                     autoFocus
                     onBlur={handleUpdateTitle}
                     onKeyDown={(e) => e.key === "Enter" && handleUpdateTitle()}
@@ -652,32 +652,32 @@ export default function CardDetailModal({
                   onClick={() => setIsEditingTitle(true)}
                 >
                   {cardTitle}
-                  <Edit2 className="w-5 h-5 opacity-0 group-hover:opacity-100 transition-opacity text-gray-400" />
+                  <Edit2 className="w-5 h-5 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground" />
                 </DialogTitle>
               )}
               
               <div className="flex flex-col gap-1 mt-1">
-                  <p className="text-xs text-gray-400 flex items-center gap-1.5">
-                    na lista <span className="font-semibold text-gray-200 underline decoration-gray-600 underline-offset-4">{listName}</span>
+                  <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                    na lista <span className="font-semibold text-foreground underline decoration-gray-600 underline-offset-4">{listName}</span>
                   </p>
-                  <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                  <p className="text-[11px] text-muted-foreground font-bold uppercase tracking-wider flex items-center gap-1.5">
                     Situação Atual Responsável: <span className="text-accent">{card?.boardOwnerName || "..."}</span>
                   </p>
 
                   {/* Seção de Responsável do Card */}
                 <div className="flex items-center gap-2.5 mt-1.5">
                   <div className="flex -space-x-2">
-                    <Avatar className="h-7 w-7 border-2 border-[var(--surface-3)] ring-1 ring-white/5">
-                      <AvatarFallback className="bg-accent/10 text-accent text-xs font-black">
+                    <Avatar className="h-7 w-7 border-2 border-[var(--surface-3)] ring-1 ring-foreground/5">
+                      <AvatarFallback className="bg-accent/10 text-accent text-xs font-semibold">
                         {card?.assignedToName ? card.assignedToName.charAt(0).toUpperCase() : <UserIcon size={14} />}
                       </AvatarFallback>
                     </Avatar>
                   </div>
                   <div className="flex flex-col">
-                    <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest leading-none mb-0.5">Responsável</span>
+                    <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest leading-none mb-0.5">Responsável</span>
                     <Popover>
                       <PopoverTrigger asChild>
-                        <button className="text-[11px] font-bold text-gray-200 hover:text-accent transition-colors flex items-center gap-1.5 group">
+                        <button className="text-[11px] font-bold text-foreground hover:text-accent transition-colors flex items-center gap-1.5 group">
                           {card?.assignedToName || "Atribuir responsável"}
                           <Plus size={12} className="opacity-50 group-hover:opacity-100" />
                         </button>
@@ -686,7 +686,7 @@ export default function CardDetailModal({
                         <Command className="bg-transparent">
                           <CommandInput placeholder="Buscar usuário..." className="border-none focus:ring-0 text-xs" />
                           <CommandList className="max-h-[200px] custom-scrollbar">
-                            <CommandEmpty className="py-4 text-center text-xs text-gray-500">Nenhum usuário encontrado.</CommandEmpty>
+                            <CommandEmpty className="py-4 text-center text-xs text-muted-foreground">Nenhum usuário encontrado.</CommandEmpty>
                             <CommandGroup>
                               <CommandItem
                                 onSelect={() => {
@@ -696,7 +696,7 @@ export default function CardDetailModal({
                                   (utils as any).cards.getByList.invalidate();
                                   toast.success("Responsável removido");
                                 }}
-                                className="flex items-center gap-2 p-2.5 hover:bg-white/5 cursor-pointer text-xs"
+                                className="flex items-center gap-2 p-2.5 hover:bg-foreground/5 cursor-pointer text-xs"
                               >
                                 <div className="w-6 h-6 rounded-full bg-red-500/10 flex items-center justify-center border border-red-500/20">
                                   <X size={12} className="text-red-400" />
@@ -713,14 +713,14 @@ export default function CardDetailModal({
                                     (utils as any).cards.getByList.invalidate();
                                     toast.success(`Atribuído a ${u.name || u.userName}`);
                                   }}
-                                  className="flex items-center gap-2 p-2.5 hover:bg-white/5 cursor-pointer text-xs"
+                                  className="flex items-center gap-2 p-2.5 hover:bg-foreground/5 cursor-pointer text-xs"
                                 >
                                   <Avatar className="h-6 w-6">
-                                    <AvatarFallback className="bg-accent/20 text-accent text-[10px] font-black uppercase">
+                                    <AvatarFallback className="bg-accent/20 text-accent text-[11px] font-semibold uppercase">
                                       {(u.name || u.userName || "?").charAt(0)}
                                     </AvatarFallback>
                                   </Avatar>
-                                  <span className="font-medium text-gray-200">{u.name || u.userName}</span>
+                                  <span className="font-medium text-foreground">{u.name || u.userName}</span>
                                   {(u.id || u.userId) === card?.assigned_to && <Check size={12} className="ml-auto text-accent" />}
                                 </CommandItem>
                               ))}
@@ -736,10 +736,10 @@ export default function CardDetailModal({
                   {(card?.startDate || card?.start_date || card?.dueDate || card?.due_date || projectDates?.projectStartDate || projectDates?.start_date || projectDates?.projectEndDate || projectDates?.end_date) ? (
                     <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-accent/10 border border-accent/20 shadow-sm">
                       <CalendarDays className="w-3.5 h-3.5 text-accent" />
-                      <div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-tight">
+                      <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-tight">
                         {(card?.startDate || card?.start_date || projectDates?.projectStartDate || projectDates?.start_date) && (
-                          <span className="text-gray-200">
-                            Início: <span className="text-white">
+                          <span className="text-foreground">
+                            Início: <span className="text-foreground">
                               {format(new Date(card?.startDate || card?.start_date || projectDates?.projectStartDate || projectDates?.start_date || ""), "dd MMM yyyy", { locale: ptBR }).toUpperCase()}
                             </span>
                           </span>
@@ -748,8 +748,8 @@ export default function CardDetailModal({
                           <span className="text-accent/40">•</span>
                         )}
                         {(card?.dueDate || card?.due_date || projectDates?.projectEndDate || projectDates?.end_date) && (
-                          <span className={cn(isOverdue ? "text-red-400" : "text-gray-200")}>
-                            Prazo: <span className={cn(isOverdue ? "text-red-400" : "text-white")}>
+                          <span className={cn(isOverdue ? "text-red-400" : "text-foreground")}>
+                            Prazo: <span className={cn(isOverdue ? "text-red-400" : "text-foreground")}>
                               {format(new Date(card?.dueDate || card?.due_date || projectDates?.projectEndDate || projectDates?.end_date || ""), "dd MMM yyyy", { locale: ptBR }).toUpperCase()}
                             </span>
                           </span>
@@ -757,7 +757,7 @@ export default function CardDetailModal({
                       </div>
                     </div>
                   ) : (
-                    <span className="text-[10px] text-gray-500 font-black uppercase tracking-widest opacity-60">Sem datas definidas</span>
+                    <span className="text-[11px] text-muted-foreground font-semibold uppercase tracking-widest opacity-60">Sem datas definidas</span>
                   )}
                 </div>
               </div>
@@ -769,7 +769,7 @@ export default function CardDetailModal({
                   size="sm" 
                   onClick={() => handleUpdateStatus(card?.status === "completed" ? "open" : "completed")}
                   className={cn(
-                    "h-9 px-4 rounded-lg font-black uppercase tracking-widest text-[10px] transition-all",
+                    "h-9 px-4 rounded-lg font-semibold uppercase tracking-widest text-[11px] transition-all",
                     card?.status === "completed" 
                       ? "bg-green-500/10 text-green-500 border-green-500/20 hover:bg-green-500/20" 
                       : "bg-accent/10 text-accent border-accent/20 hover:bg-accent/20"
@@ -784,17 +784,17 @@ export default function CardDetailModal({
 
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="hover:bg-accent/10 h-9 w-9 rounded-lg text-gray-400">
+                    <Button variant="ghost" size="icon" className="hover:bg-accent/10 h-9 w-9 rounded-lg text-muted-foreground">
                       <MoreHorizontal size={18} />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-56 bg-[var(--surface-1)] border-[var(--surface-border)]">
-                    <DropdownMenuItem onClick={handleCloneCard} className="flex items-center gap-2.5 p-2.5 hover:bg-white/5 cursor-pointer text-xs font-bold text-gray-200">
+                    <DropdownMenuItem onClick={handleCloneCard} className="flex items-center gap-2.5 p-2.5 hover:bg-foreground/5 cursor-pointer text-xs font-bold text-foreground">
                       <Copy size={14} className="text-blue-400" /> Clonar Cartão
                     </DropdownMenuItem>
                     
                     <DropdownMenuSub>
-                      <DropdownMenuSubTrigger className="flex items-center gap-2.5 p-2.5 hover:bg-white/5 cursor-pointer text-xs font-bold text-gray-200">
+                      <DropdownMenuSubTrigger className="flex items-center gap-2.5 p-2.5 hover:bg-foreground/5 cursor-pointer text-xs font-bold text-foreground">
                         <MoveHorizontal size={14} className="text-amber-400" /> Mover para outro quadro
                       </DropdownMenuSubTrigger>
                       <DropdownMenuPortal>
@@ -805,8 +805,8 @@ export default function CardDetailModal({
                               <DropdownMenuSub key={b.id}>
                                 <DropdownMenuSubTrigger 
                                   className={cn(
-                                    "flex items-center gap-2.5 p-3 rounded-md hover:bg-white/5 cursor-pointer text-[11px] font-black uppercase tracking-wider transition-all",
-                                    isCurrentBoard ? "bg-accent text-primary hover:bg-accent/90" : "text-gray-300"
+                                    "flex items-center gap-2.5 p-3 rounded-md hover:bg-foreground/5 cursor-pointer text-[11px] font-semibold uppercase tracking-wider transition-all",
+                                    isCurrentBoard ? "bg-accent text-primary hover:bg-accent/90" : "text-foreground"
                                   )}
                                 >
                                   {b.name}
@@ -815,14 +815,14 @@ export default function CardDetailModal({
                                 <DropdownMenuPortal>
                                   <DropdownMenuSubContent className="w-56 bg-[var(--surface-3)] border-[var(--surface-border)] p-1.5 shadow-2xl ml-1">
                                     <div className="px-2 py-1.5 mb-1 border-b border-[var(--surface-border)]">
-                                      <span className="text-[9px] font-black text-gray-500 uppercase tracking-[0.2em]">Listas de Destino</span>
+                                      <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.2em]">Listas de Destino</span>
                                     </div>
                                     {b.lists && b.lists.length > 0 ? (
                                       b.lists.map((l: any) => (
                                         <DropdownMenuItem 
                                           key={l.id} 
                                           onClick={() => handleMoveCard(l.id)}
-                                          className="flex items-center gap-2.5 p-2.5 rounded hover:bg-accent/10 hover:text-accent cursor-pointer text-[10px] font-bold text-gray-400 transition-colors"
+                                          className="flex items-center gap-2.5 p-2.5 rounded hover:bg-accent/10 hover:text-accent cursor-pointer text-[11px] font-bold text-muted-foreground transition-colors"
                                         >
                                           <LayoutGrid size={12} className="opacity-50" />
                                           {l.name}
@@ -830,7 +830,7 @@ export default function CardDetailModal({
                                       ))
                                     ) : (
                                       <div className="p-3 text-center">
-                                        <span className="text-[10px] text-gray-500 italic">Nenhuma lista encontrada</span>
+                                        <span className="text-[11px] text-muted-foreground italic">Nenhuma lista encontrada</span>
                                       </div>
                                     )}
                                   </DropdownMenuSubContent>
@@ -844,7 +844,7 @@ export default function CardDetailModal({
 
                     <DropdownMenuSeparator className="bg-[var(--surface-border)]" />
                     
-                    <DropdownMenuItem onClick={handleArchiveCard} className="flex items-center gap-2.5 p-2.5 hover:bg-white/5 cursor-pointer text-xs font-bold text-amber-400">
+                    <DropdownMenuItem onClick={handleArchiveCard} className="flex items-center gap-2.5 p-2.5 hover:bg-foreground/5 cursor-pointer text-xs font-bold text-amber-400">
                       <Archive size={14} /> Arquivar Cartão
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={handleDeleteCard} className="flex items-center gap-2.5 p-2.5 hover:bg-red-500/10 cursor-pointer text-xs font-bold text-red-400">
@@ -858,7 +858,7 @@ export default function CardDetailModal({
                   size="icon" 
                   onClick={handleRefresh}
                   disabled={isRefreshing}
-                  className="hover:bg-accent/10 h-9 w-9 rounded-lg text-gray-400 transition-all"
+                  className="hover:bg-accent/10 h-9 w-9 rounded-lg text-muted-foreground transition-all"
                   title={isEnglish ? "Refresh" : "Atualizar"}
                 >
                   <RefreshCw size={18} className={cn(isRefreshing && "animate-spin")} />
@@ -870,7 +870,7 @@ export default function CardDetailModal({
                   onClick={() => setIsMaximized(!isMaximized)}
                 className={cn(
                   "hover:bg-accent/10 h-9 w-9 rounded-lg transition-all duration-300",
-                  isMaximized ? "text-accent bg-accent/5" : "text-gray-400"
+                  isMaximized ? "text-accent bg-accent/5" : "text-muted-foreground"
                 )}
                 title={isMaximized ? "Recolher" : "Expandir"}
               >
@@ -880,7 +880,7 @@ export default function CardDetailModal({
                 variant="ghost" 
                 size="icon" 
                 onClick={onClose}
-                className="hover:bg-red-500/10 hover:text-red-400 text-gray-400 h-9 w-9 rounded-lg transition-colors"
+                className="hover:bg-red-500/10 hover:text-red-400 text-muted-foreground h-9 w-9 rounded-lg transition-colors"
               >
                 <X size={18} />
               </Button>
@@ -908,7 +908,7 @@ export default function CardDetailModal({
               <div className="flex flex-col md:flex-row justify-between items-start gap-4 pb-5 border-b border-[var(--surface-border)]/40">
                 <div className="flex flex-wrap gap-4">
                   <div className="space-y-4">
-                    <h4 className="text-[11px] font-bold text-gray-500 uppercase tracking-widest flex items-center gap-2">
+                    <h4 className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-2">
                       <Tag className="w-3 h-3" /> Etiquetas
                     </h4>
                     <div className="flex flex-wrap gap-2.5">
@@ -916,21 +916,21 @@ export default function CardDetailModal({
                         labels.map((label: any) => (
                           <div 
                             key={label.id} 
-                            className="px-4 py-1.5 rounded-md text-[11px] font-bold text-white shadow-sm ring-1 ring-white/10 hover:brightness-110 transition-all cursor-default" 
+                            className="px-4 py-1.5 rounded-md text-[11px] font-bold text-foreground shadow-sm ring-1 ring-foreground/10 hover:brightness-110 transition-all cursor-default" 
                             style={{ backgroundColor: label.color }}
                           >
                             {label.label}
                           </div>
                         ))
                       ) : (
-                        <span className="text-[10px] text-gray-500 italic">Nenhuma etiqueta</span>
+                        <span className="text-[11px] text-muted-foreground italic">Nenhuma etiqueta</span>
                       )}
                     </div>
                   </div>
                 </div>
 
                 <div className="space-y-4">
-                  <h4 className="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Adicionar ao cartão</h4>
+                  <h4 className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">Adicionar ao cartão</h4>
                   <div className="flex flex-wrap gap-3">
                     <Popover>
                       <PopoverTrigger asChild>
@@ -940,12 +940,12 @@ export default function CardDetailModal({
                       </PopoverTrigger>
                       <PopoverContent className="w-64 bg-[var(--surface-1)] border-[var(--surface-border)] p-4 shadow-2xl">
                         <div className="space-y-4">
-                          <h3 className="text-sm font-bold text-gray-200">Gerenciar Etiquetas</h3>
+                          <h3 className="text-sm font-bold text-foreground">Gerenciar Etiquetas</h3>
                           <div className="flex flex-wrap gap-2">
                             {labels?.map((label: any) => (
                               <div
                                 key={label.id}
-                                className="flex items-center gap-2 px-2.5 py-1 rounded text-white text-[10px] font-bold group ring-1 ring-white/10"
+                                className="flex items-center gap-2 px-2.5 py-1 rounded text-foreground text-[11px] font-bold group ring-1 ring-foreground/10"
                                 style={{ backgroundColor: label.color }}
                               >
                                 {label.label}
@@ -962,7 +962,7 @@ export default function CardDetailModal({
                               value={newLabel}
                               onChange={(e) => setNewLabel(e.target.value)}
                               placeholder="Nome da etiqueta..."
-                              className="w-full bg-[var(--surface-2)] border border-[var(--surface-border)] rounded px-3 py-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-accent"
+                              className="w-full bg-[var(--surface-2)] border border-[var(--surface-border)] rounded px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
                             />
                             <div className="flex items-center justify-between gap-3">
                               <input
@@ -989,27 +989,27 @@ export default function CardDetailModal({
                       <PopoverContent className="w-80 bg-[var(--surface-1)] border-[var(--surface-border)] p-5 shadow-2xl animate-in fade-in zoom-in duration-200">
                         <div className="space-y-5">
                           <div className="flex items-center justify-between">
-                            <h3 className="text-sm font-bold text-gray-200">Novo Checklist</h3>
-                            <button onClick={() => setIsCreatingChecklist(false)} className="text-gray-500 hover:text-white transition-colors">
+                            <h3 className="text-sm font-bold text-foreground">Novo Checklist</h3>
+                            <button onClick={() => setIsCreatingChecklist(false)} className="text-muted-foreground hover:text-foreground transition-colors">
                               <X className="w-4 h-4" />
                             </button>
                           </div>
                           
                           <div className="space-y-2">
-                            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Título</label>
+                            <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">Título</label>
                             <input
                               autoFocus
                               type="text"
                               value={newChecklistGroupTitle}
                               onChange={(e) => setNewChecklistGroupTitle(e.target.value)}
                               placeholder="Ex: Tarefas Iniciais"
-                              className="w-full bg-[var(--surface-2)] border border-[var(--surface-border)] rounded-lg px-3.5 py-2.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-accent transition-all"
+                              className="w-full bg-[var(--surface-2)] border border-[var(--surface-border)] rounded-lg px-3.5 py-2.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-accent transition-all"
                               onKeyDown={(e) => e.key === "Enter" && handleAddChecklistGroup()}
                             />
                           </div>
 
                           <div className="space-y-2">
-                            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Usar Modelo</label>
+                            <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">Usar Modelo</label>
                             <Select 
                               value={selectedTemplateId} 
                               onValueChange={(val) => {
@@ -1018,15 +1018,15 @@ export default function CardDetailModal({
                                 if (template) setNewChecklistGroupTitle(template.name);
                               }}
                             >
-                              <SelectTrigger className="bg-[var(--surface-2)] border-[var(--surface-border)] h-10 rounded-lg text-xs text-gray-300">
+                              <SelectTrigger className="bg-[var(--surface-2)] border-[var(--surface-border)] h-10 rounded-lg text-xs text-foreground">
                                 <SelectValue placeholder="Selecione um modelo..." />
                               </SelectTrigger>
-                              <SelectContent className="bg-[var(--surface-1)] border-[var(--surface-border)] text-white">
+                              <SelectContent className="bg-[var(--surface-1)] border-[var(--surface-border)] text-foreground">
                                 {(templates as any)?.map((t: any) => (
                                   <SelectItem key={t.id} value={t.id.toString()} className="text-xs">
                                     <div className="flex items-center gap-2">
                                       <span>{t.name}</span>
-                                      {t.isGlobal && <span className="text-[8px] bg-accent/20 text-accent px-1 rounded font-bold uppercase">Global</span>}
+                                      {t.isGlobal && <span className="text-[11px] bg-accent/20 text-accent px-1 rounded font-bold uppercase">Global</span>}
                                     </div>
                                   </SelectItem>
                                 ))}
@@ -1048,7 +1048,7 @@ export default function CardDetailModal({
                               variant="ghost" 
                               size="sm" 
                               onClick={() => setIsCreatingChecklist(false)} 
-                              className="h-10 px-4 text-xs text-gray-400 hover:text-white"
+                              className="h-10 px-4 text-xs text-muted-foreground hover:text-foreground"
                             >
                               Cancelar
                             </Button>
@@ -1065,13 +1065,13 @@ export default function CardDetailModal({
                       </PopoverTrigger>
                       <PopoverContent className="w-80 p-0 bg-[var(--surface-1)] border-[var(--surface-border)] shadow-2xl overflow-hidden rounded-xl">
                         <div className="p-5 space-y-5">
-                          <h3 className="text-sm font-bold text-gray-200">Gerenciar Prazos</h3>
+                          <h3 className="text-sm font-bold text-foreground">Gerenciar Prazos</h3>
                           
                           <div className="space-y-2">
-                            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Data de Início</label>
+                            <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">Data de Início</label>
                             <input 
                               type="date" 
-                              className="bg-[var(--surface-2)] border border-[var(--surface-border)] rounded-lg px-3.5 py-2.5 text-sm text-white w-full focus:ring-1 focus:ring-accent outline-none transition-all"
+                              className="bg-[var(--surface-2)] border border-[var(--surface-border)] rounded-lg px-3.5 py-2.5 text-sm text-foreground w-full focus:ring-1 focus:ring-accent outline-none transition-all"
                               onChange={(e) => handleUpdateStartDate(e.target.value ? new Date(e.target.value) : null)}
                               value={(() => {
                                 const dateValue = card?.startDate || card?.start_date || projectDates?.projectStartDate || projectDates?.start_date;
@@ -1086,10 +1086,10 @@ export default function CardDetailModal({
                           </div>
 
                           <div className="space-y-2">
-                            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Data de Entrega</label>
+                            <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">Data de Entrega</label>
                             <input 
                               type="date" 
-                              className="bg-[var(--surface-2)] border border-[var(--surface-border)] rounded-lg px-3.5 py-2.5 text-sm text-white w-full focus:ring-1 focus:ring-accent outline-none transition-all"
+                              className="bg-[var(--surface-2)] border border-[var(--surface-border)] rounded-lg px-3.5 py-2.5 text-sm text-foreground w-full focus:ring-1 focus:ring-accent outline-none transition-all"
                               onChange={(e) => handleUpdateDueDate(e.target.value ? new Date(e.target.value) : null)}
                               value={(() => {
                                 const dateValue = card?.dueDate || card?.due_date || projectDates?.projectEndDate || projectDates?.end_date;
@@ -1143,10 +1143,10 @@ export default function CardDetailModal({
               {/* Description Section */}
               <section className="space-y-6">
                 <div className="flex items-center gap-4">
-                  <div className="p-2.5 rounded-xl bg-white/5 border border-white/5 shadow-inner">
-                    <AlignLeft className="w-5 h-5 text-gray-400" />
+                  <div className="p-2.5 rounded-xl bg-foreground/5 border border-foreground/5 shadow-inner">
+                    <AlignLeft className="w-5 h-5 text-muted-foreground" />
                   </div>
-                  <h3 className="font-bold text-xl text-gray-200 tracking-tight">Descrição</h3>
+                  <h3 className="font-bold text-xl text-foreground tracking-tight">Descrição</h3>
                 </div>
                 <div className={cn("transition-all duration-500", isMaximized ? "pl-10" : "pl-10")}>
                   <textarea 
@@ -1154,7 +1154,7 @@ export default function CardDetailModal({
                     onChange={(e) => setDescription(e.target.value)} 
                     onBlur={handleUpdateDescription} 
                     placeholder="Adicione uma descrição detalhada sobre esta tarefa..." 
-                    className="w-full min-h-[160px] bg-[var(--surface-3)]/50 border border-[var(--surface-border)] rounded-2xl p-6 text-sm leading-relaxed text-gray-300 resize-y focus:border-accent/40 focus:ring-1 focus:ring-accent/20 transition-all outline-none shadow-inner" 
+                    className="w-full min-h-[160px] bg-[var(--surface-3)]/50 border border-[var(--surface-border)] rounded-2xl p-6 text-sm leading-relaxed text-foreground resize-y focus:border-accent/40 focus:ring-1 focus:ring-accent/20 transition-all outline-none shadow-inner" 
                   />
                 </div>
               </section>
@@ -1162,10 +1162,10 @@ export default function CardDetailModal({
               {/* Custom Fields Section */}
               <section className="space-y-6">
                 <div className="flex items-center gap-4">
-                  <div className="p-2.5 rounded-xl bg-white/5 border border-white/5 shadow-inner">
-                    <LayoutGrid className="w-5 h-5 text-gray-400" />
+                  <div className="p-2.5 rounded-xl bg-foreground/5 border border-foreground/5 shadow-inner">
+                    <LayoutGrid className="w-5 h-5 text-muted-foreground" />
                   </div>
-                  <h3 className="font-bold text-xl text-gray-200 tracking-tight">Dados Adicionais</h3>
+                  <h3 className="font-bold text-xl text-foreground tracking-tight">Dados Adicionais</h3>
                 </div>
                 <div className={cn(
                   "grid gap-4 transition-all duration-500",
@@ -1174,16 +1174,16 @@ export default function CardDetailModal({
                   <div className="space-y-3">
                     <div className="flex items-center gap-2.5">
                       <div className="w-1.5 h-1.5 rounded-full bg-red-400 shadow-[0_0_8px_rgba(248,113,113,0.6)] animate-pulse" />
-                      <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Prioridade</label>
+                      <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">Prioridade</label>
                     </div>
                     <Select 
                       value={getCustomFieldValue("Mapa de Calor")}
                       onValueChange={(val) => handleUpsertCustomField("Mapa de Calor", val)}
                     >
-                      <SelectTrigger className="bg-[var(--surface-3)] border-[var(--surface-border)] h-11 rounded-xl text-xs font-bold text-gray-300 hover:bg-[var(--surface-2)] transition-all hover:border-[var(--surface-border)]">
+                      <SelectTrigger className="bg-[var(--surface-3)] border-[var(--surface-border)] h-11 rounded-xl text-xs font-bold text-foreground hover:bg-[var(--surface-2)] transition-all hover:border-[var(--surface-border)]">
                         <SelectValue placeholder="Selecione..." />
                       </SelectTrigger>
-                      <SelectContent className="bg-[var(--surface-1)] border-[var(--surface-border)] text-white">
+                      <SelectContent className="bg-[var(--surface-1)] border-[var(--surface-border)] text-foreground">
                         <SelectItem value="Baixo">Baixo</SelectItem>
                         <SelectItem value="Médio">Médio</SelectItem>
                         <SelectItem value="Alto">Alto</SelectItem>
@@ -1195,16 +1195,16 @@ export default function CardDetailModal({
                   <div className="space-y-3">
                     <div className="flex items-center gap-2.5">
                       <div className="w-1.5 h-1.5 rounded-full bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.6)] animate-pulse" />
-                      <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Status Atual</label>
+                      <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">Status Atual</label>
                     </div>
                     <Select 
                       value={getCustomFieldValue("Status")}
                       onValueChange={(val) => handleUpsertCustomField("Status", val)}
                     >
-                      <SelectTrigger className="bg-[var(--surface-3)] border-[var(--surface-border)] h-11 rounded-xl text-xs font-bold text-gray-300 hover:bg-[var(--surface-2)] transition-all hover:border-[var(--surface-border)]">
+                      <SelectTrigger className="bg-[var(--surface-3)] border-[var(--surface-border)] h-11 rounded-xl text-xs font-bold text-foreground hover:bg-[var(--surface-2)] transition-all hover:border-[var(--surface-border)]">
                         <SelectValue placeholder="Selecione..." />
                       </SelectTrigger>
-                      <SelectContent className="bg-[var(--surface-1)] border-[var(--surface-border)] text-white">
+                      <SelectContent className="bg-[var(--surface-1)] border-[var(--surface-border)] text-foreground">
                         <SelectItem value="Pendente">Pendente</SelectItem>
                         <SelectItem value="Em Andamento">Em Andamento</SelectItem>
                         <SelectItem value="Concluído">Concluído</SelectItem>
@@ -1216,16 +1216,16 @@ export default function CardDetailModal({
                   <div className="space-y-3">
                     <div className="flex items-center gap-2.5">
                       <div className="w-1.5 h-1.5 rounded-full bg-yellow-400 shadow-[0_0_8px_rgba(250,204,21,0.6)] animate-pulse" />
-                      <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Perfil do Cliente</label>
+                      <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">Perfil do Cliente</label>
                     </div>
                     <Select 
                       value={getCustomFieldValue("Classificação")}
                       onValueChange={(val) => handleUpsertCustomField("Classificação", val)}
                     >
-                      <SelectTrigger className="bg-[var(--surface-3)] border-[var(--surface-border)] h-11 rounded-xl text-xs font-bold text-gray-300 hover:bg-[var(--surface-2)] transition-all hover:border-[var(--surface-border)]">
+                      <SelectTrigger className="bg-[var(--surface-3)] border-[var(--surface-border)] h-11 rounded-xl text-xs font-bold text-foreground hover:bg-[var(--surface-2)] transition-all hover:border-[var(--surface-border)]">
                         <SelectValue placeholder="Selecione..." />
                       </SelectTrigger>
-                      <SelectContent className="bg-[var(--surface-1)] border-[var(--surface-border)] text-white">
+                      <SelectContent className="bg-[var(--surface-1)] border-[var(--surface-border)] text-foreground">
                         <SelectItem value="Bronze">Bronze</SelectItem>
                         <SelectItem value="Prata">Prata</SelectItem>
                         <SelectItem value="Ouro">Ouro</SelectItem>
@@ -1238,9 +1238,9 @@ export default function CardDetailModal({
                     <div className="space-y-3 animate-in fade-in slide-in-from-left-2 duration-500">
                       <div className="flex items-center gap-2.5">
                         <div className="w-1.5 h-1.5 rounded-full bg-purple-400 shadow-[0_0_8px_rgba(192,132,252,0.6)] animate-pulse" />
-                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Origem</label>
+                        <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">Origem</label>
                       </div>
-                      <div className="h-11 rounded-xl bg-[var(--surface-3)] border border-[var(--surface-border)] flex items-center px-4 text-xs text-gray-400 font-bold">
+                      <div className="h-11 rounded-xl bg-[var(--surface-3)] border border-[var(--surface-border)] flex items-center px-4 text-xs text-muted-foreground font-bold">
                         {listName || "N/A"}
                       </div>
                     </div>
@@ -1274,26 +1274,26 @@ export default function CardDetailModal({
                                 defaultValue={group.title}
                                 onBlur={(e) => handleUpdateChecklistGroup(group.id, e.target.value)}
                                 onKeyDown={(e) => e.key === "Enter" && handleUpdateChecklistGroup(group.id, (e.target as HTMLInputElement).value)}
-                                className="bg-[var(--surface-2)] border border-accent/40 rounded-xl px-4 py-2 text-xl font-bold text-gray-200 outline-none w-full max-w-2xl focus:ring-2 focus:ring-accent/20"
+                                className="bg-[var(--surface-2)] border border-accent/40 rounded-xl px-4 py-2 text-xl font-bold text-foreground outline-none w-full max-w-2xl focus:ring-2 focus:ring-accent/20"
                               />
                             ) : (
                               <h3 
                                 onClick={() => setEditingGroupId(group.id)}
-                                className="font-bold text-2xl text-gray-200 cursor-pointer hover:text-accent transition-all truncate tracking-tight"
+                                className="font-bold text-2xl text-foreground cursor-pointer hover:text-accent transition-all truncate tracking-tight"
                               >
                                 {group.title}
                               </h3>
                             )}
                           </div>
                           <div className="flex items-center gap-4">
-                            <div className="text-xs font-black text-accent bg-accent/10 px-4 py-2 rounded-full border border-accent/20 shadow-sm shadow-accent/5">
+                            <div className="text-xs font-semibold text-accent bg-accent/10 px-4 py-2 rounded-full border border-accent/20 shadow-sm shadow-accent/5">
                               {Math.round(groupProgress)}%
                             </div>
                             <Button 
                               variant="ghost" 
                               size="sm" 
                               onClick={() => handleCopyChecklistGroup(group.id)}
-                              className="text-gray-500 hover:text-accent h-10 px-4 rounded-xl hover:bg-accent/5 transition-all font-bold"
+                              className="text-muted-foreground hover:text-accent h-10 px-4 rounded-xl hover:bg-accent/5 transition-all font-bold"
                               title="Copiar este checklist"
                             >
                               <Copy size={16} className="mr-2" />
@@ -1303,7 +1303,7 @@ export default function CardDetailModal({
                               variant="ghost" 
                               size="sm" 
                               onClick={() => handleDeleteChecklistGroup(group.id)}
-                              className="text-gray-500 hover:text-red-400 h-10 px-4 rounded-xl hover:bg-red-400/5 transition-all font-bold"
+                              className="text-muted-foreground hover:text-red-400 h-10 px-4 rounded-xl hover:bg-red-400/5 transition-all font-bold"
                             >
                               Remover
                             </Button>
@@ -1315,7 +1315,7 @@ export default function CardDetailModal({
                                 <Button 
                                   variant="ghost" 
                                   size="sm" 
-                                  className="text-gray-500 hover:text-accent h-10 px-4 rounded-xl hover:bg-accent/5 transition-all"
+                                  className="text-muted-foreground hover:text-accent h-10 px-4 rounded-xl hover:bg-accent/5 transition-all"
                                   title="Salvar como modelo"
                                 >
                                   <Copy className="w-4 h-4" />
@@ -1323,13 +1323,13 @@ export default function CardDetailModal({
                               </PopoverTrigger>
                               <PopoverContent className="w-72 bg-[var(--surface-1)] border-[var(--surface-border)] p-4 shadow-2xl rounded-xl">
                                 <div className="space-y-4">
-                                  <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Nome do Novo Modelo</p>
+                                  <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">Nome do Novo Modelo</p>
                                   <input
                                     type="text"
                                     value={templateName}
                                     onChange={(e) => setTemplateName(e.target.value)}
                                     placeholder="Ex: Padrão de Entrega..."
-                                    className="w-full bg-[var(--surface-3)] border border-[var(--surface-border)] rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-accent transition-all"
+                                    className="w-full bg-[var(--surface-3)] border border-[var(--surface-border)] rounded-lg px-3 py-2 text-sm text-foreground outline-none focus:border-accent transition-all"
                                     autoFocus
                                   />
                                   <div className="flex justify-end gap-2">
@@ -1364,7 +1364,7 @@ export default function CardDetailModal({
                         )}>
                           <div className="flex items-center gap-5">
                             <Progress value={groupProgress} className="h-2 bg-[var(--surface-3)] rounded-full flex-1" />
-                            <span className="text-[11px] font-bold text-gray-500 tabular-nums w-8">{Math.round(groupProgress)}%</span>
+                            <span className="text-[11px] font-bold text-muted-foreground tabular-nums w-8">{Math.round(groupProgress)}%</span>
                           </div>
                           
                           <div className="grid gap-3">
@@ -1379,7 +1379,7 @@ export default function CardDetailModal({
                                 <div 
                                   key={item.id} 
                                   className={cn(
-                                    "group flex items-start gap-5 rounded-2xl transition-all border border-transparent hover:border-[var(--surface-border)]/60 hover:bg-white/[0.03] shadow-sm",
+                                    "group flex items-start gap-5 rounded-2xl transition-all border border-transparent hover:border-[var(--surface-border)]/60 hover:bg-foreground/[0.03] shadow-sm",
                                     isMaximized ? "p-5" : "p-4"
                                   )}
                                 >
@@ -1399,7 +1399,7 @@ export default function CardDetailModal({
                                         rows={1}
                                         className={cn(
                                           "text-[15px] flex-1 bg-transparent border-none p-0 focus:ring-0 focus:outline-none font-medium transition-colors break-words h-auto whitespace-normal leading-relaxed resize-none overflow-hidden",
-                                          item.completed ? "line-through text-gray-500" : "text-gray-200"
+                                          item.completed ? "line-through text-muted-foreground" : "text-foreground"
                                         )}
                                         onInput={(e) => {
                                           const target = e.target as HTMLTextAreaElement;
@@ -1410,10 +1410,10 @@ export default function CardDetailModal({
                                       <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
                                         <Popover>
                                           <PopoverTrigger asChild>
-                                            <button className="p-2 rounded-xl hover:bg-white/10 text-gray-500 transition-all border border-transparent hover:border-[var(--surface-border)]" title="Atribuir responsável">
+                                            <button className="p-2 rounded-xl hover:bg-foreground/10 text-muted-foreground transition-all border border-transparent hover:border-[var(--surface-border)]" title="Atribuir responsável">
                                               {assignedUser ? (
                                                 <Avatar className="w-7 h-7 ring-2 ring-accent/20">
-                                                  <AvatarFallback className="bg-accent text-[10px] text-accent-foreground font-black">
+                                                  <AvatarFallback className="bg-accent text-[11px] text-accent-foreground font-semibold">
                                                     {assignedUser.name?.charAt(0).toUpperCase()}
                                                   </AvatarFallback>
                                                 </Avatar>
@@ -1426,14 +1426,14 @@ export default function CardDetailModal({
                                             <Command className="bg-transparent">
                                               <CommandInput placeholder="Buscar usuário..." className="border-none focus:ring-0 text-xs" />
                                               <CommandList className="max-h-[200px] custom-scrollbar">
-                                                <CommandEmpty className="py-4 text-center text-xs text-gray-500">Nenhum usuário encontrado.</CommandEmpty>
+                                                <CommandEmpty className="py-4 text-center text-xs text-muted-foreground">Nenhum usuário encontrado.</CommandEmpty>
                                                 <CommandGroup>
                                                   <CommandItem
                                                     onSelect={() => {
                                                       handleUpdateChecklistItem(item.id, { assignedUserId: null });
                                                       toast.success("Responsável removido do item");
                                                     }}
-                                                    className="flex items-center gap-2 p-2.5 hover:bg-white/5 cursor-pointer text-xs"
+                                                    className="flex items-center gap-2 p-2.5 hover:bg-foreground/5 cursor-pointer text-xs"
                                                   >
                                                     <div className="w-6 h-6 rounded-full bg-red-500/10 flex items-center justify-center border border-red-500/20">
                                                       <X size={12} className="text-red-400" />
@@ -1447,14 +1447,14 @@ export default function CardDetailModal({
                                                         handleUpdateChecklistItem(item.id, { assignedUserId: u.id || u.userId });
                                                         toast.success(`Item atribuído a ${u.name || u.userName}`);
                                                       }}
-                                                      className="flex items-center gap-2 p-2.5 hover:bg-white/5 cursor-pointer text-xs"
+                                                      className="flex items-center gap-2 p-2.5 hover:bg-foreground/5 cursor-pointer text-xs"
                                                     >
                                                       <Avatar className="h-6 w-6">
-                                                        <AvatarFallback className="bg-accent/20 text-accent text-[10px] font-black uppercase">
+                                                        <AvatarFallback className="bg-accent/20 text-accent text-[11px] font-semibold uppercase">
                                                           {(u.name || u.userName || "?").charAt(0)}
                                                         </AvatarFallback>
                                                       </Avatar>
-                                                      <span className="font-medium text-gray-200">{u.name || u.userName}</span>
+                                                      <span className="font-medium text-foreground">{u.name || u.userName}</span>
                                                       {(u.id || u.userId) === assignedUserId && <Check size={12} className="ml-auto text-accent" />}
                                                     </CommandItem>
                                                   ))}
@@ -1467,25 +1467,25 @@ export default function CardDetailModal({
                                         <Popover>
                                           <PopoverTrigger asChild>
                                             <button className={cn(
-                                              "p-2 rounded-xl hover:bg-white/10 transition-all border border-transparent hover:border-[var(--surface-border)]",
-                                              item.due_date ? "text-accent" : "text-gray-500"
+                                              "p-2 rounded-xl hover:bg-foreground/10 transition-all border border-transparent hover:border-[var(--surface-border)]",
+                                              item.due_date ? "text-accent" : "text-muted-foreground"
                                             )} title="Definir prazo do item">
                                               <CalendarDays className="w-4.5 h-4.5" />
                                             </button>
                                           </PopoverTrigger>
                                           <PopoverContent className="w-auto p-0 bg-[var(--surface-1)] border-[var(--surface-border)] shadow-2xl rounded-xl overflow-hidden" align="end">
                                             <div className="p-4 space-y-4">
-                                              <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Prazo da Subtarefa</p>
+                                              <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">Prazo da Subtarefa</p>
                                               <input
                                                 type="date"
-                                                className="bg-[var(--surface-2)] border border-[var(--surface-border)] rounded-lg px-3.5 py-2 text-xs text-white outline-none focus:ring-2 focus:ring-accent/30 transition-all"
+                                                className="bg-[var(--surface-2)] border border-[var(--surface-border)] rounded-lg px-3.5 py-2 text-xs text-foreground outline-none focus:ring-2 focus:ring-accent/30 transition-all"
                                                 onChange={(e) => handleUpdateChecklistItem(item.id, { dueDate: e.target.value ? new Date(e.target.value) : null })}
                                                 value={item.due_date ? new Date(item.due_date).toISOString().split('T')[0] : ''}
                                               />
                                               {item.due_date && (
                                                 <button
                                                   onClick={() => handleUpdateChecklistItem(item.id, { dueDate: null })}
-                                                  className="w-full text-center text-[10px] text-red-400 hover:text-red-500 py-2 font-bold transition-colors"
+                                                  className="w-full text-center text-[11px] text-red-400 hover:text-red-500 py-2 font-bold transition-colors"
                                                 >
                                                   Limpar Prazo
                                                 </button>
@@ -1496,11 +1496,11 @@ export default function CardDetailModal({
 
                                         <DropdownMenu>
                                           <DropdownMenuTrigger asChild>
-                                            <button className="p-2 rounded-xl hover:bg-white/10 transition-all border border-transparent hover:border-[var(--surface-border)]">
-                                              <MoreVertical className="w-4.5 h-4.5 text-gray-500" />
+                                            <button className="p-2 rounded-xl hover:bg-foreground/10 transition-all border border-transparent hover:border-[var(--surface-border)]">
+                                              <MoreVertical className="w-4.5 h-4.5 text-muted-foreground" />
                                             </button>
                                           </DropdownMenuTrigger>
-                                          <DropdownMenuContent className="bg-[var(--surface-1)] border-[var(--surface-border)] text-white shadow-2xl rounded-xl min-w-[160px]">
+                                          <DropdownMenuContent className="bg-[var(--surface-1)] border-[var(--surface-border)] text-foreground shadow-2xl rounded-xl min-w-[160px]">
                                             <DropdownMenuItem 
                                               onClick={() => handleRemoveChecklist(item.id)} 
                                               className="text-red-400 focus:text-red-400 focus:bg-red-400/10 cursor-pointer text-xs font-bold p-3 rounded-lg"
@@ -1515,7 +1515,7 @@ export default function CardDetailModal({
                                     <div className="flex flex-wrap items-center gap-3">
                                       {item.due_date && (
                                         <div className={cn(
-                                          "flex items-center gap-1.5 text-[10px] font-black px-3 py-1 rounded-md border",
+                                          "flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1 rounded-md border",
                                           isItemOverdue 
                                             ? "bg-red-500/10 text-red-400 border-red-500/20 shadow-[0_0_10px_rgba(239,68,68,0.1)]" 
                                             : "bg-accent/10 text-accent border-accent/20 shadow-[0_0_10px_rgba(var(--accent-rgb),0.1)]"
@@ -1526,12 +1526,12 @@ export default function CardDetailModal({
                                       )}
                                       {assignedUser && (
                                         <div className="flex items-center gap-2 bg-[var(--surface-2)] px-3 py-1 rounded-md border border-[var(--surface-border)] shadow-sm">
-                                          <Avatar className="w-4 h-4 ring-1 ring-white/10">
-                                            <AvatarFallback className="bg-accent text-[7px] text-accent-foreground font-black">
+                                          <Avatar className="w-4 h-4 ring-1 ring-foreground/10">
+                                            <AvatarFallback className="bg-accent text-[11px] text-accent-foreground font-semibold">
                                               {assignedUser.name?.charAt(0).toUpperCase()}
                                             </AvatarFallback>
                                           </Avatar>
-                                          <span className="text-[10px] font-bold text-gray-400">{assignedUser.name}</span>
+                                          <span className="text-[11px] font-bold text-muted-foreground">{assignedUser.name}</span>
                                         </div>
                                       )}
                                     </div>
@@ -1547,7 +1547,7 @@ export default function CardDetailModal({
                                   value={newChecklistItems[group.id] || ""}
                                   onChange={(e) => setNewChecklistItems(prev => ({ ...prev, [group.id]: e.target.value }))}
                                   placeholder="Escreva uma nova subtarefa..."
-                                  className="w-full bg-[var(--surface-3)]/50 hover:bg-[var(--surface-2)]/60 border border-transparent focus:border-accent/40 rounded-2xl px-6 py-4 text-sm text-gray-300 outline-none transition-all shadow-inner pr-28"
+                                  className="w-full bg-[var(--surface-3)]/50 hover:bg-[var(--surface-2)]/60 border border-transparent focus:border-accent/40 rounded-2xl px-6 py-4 text-sm text-foreground outline-none transition-all shadow-inner pr-28"
                                   onKeyDown={(e) => e.key === "Enter" && handleAddChecklistItem(group.id)}
                                 />
                                 {newChecklistItems[group.id] && (
@@ -1573,10 +1573,10 @@ export default function CardDetailModal({
               {attachments && attachments.length > 0 && (
                 <section className="space-y-6">
                   <div className="flex items-center gap-4">
-                    <div className="p-2.5 rounded-xl bg-white/5 border border-white/5 shadow-inner">
-                      <Paperclip className="w-5 h-5 text-gray-400" />
+                    <div className="p-2.5 rounded-xl bg-foreground/5 border border-foreground/5 shadow-inner">
+                      <Paperclip className="w-5 h-5 text-muted-foreground" />
                     </div>
-                    <h3 className="font-bold text-xl text-gray-200 tracking-tight">Anexos</h3>
+                    <h3 className="font-bold text-xl text-foreground tracking-tight">Anexos</h3>
                   </div>
                   <div className={cn(
                     "grid gap-6 transition-all duration-500",
@@ -1604,8 +1604,8 @@ export default function CardDetailModal({
                                 />
                               ) : (
                                 <div className="flex flex-col items-center gap-2">
-                                  <FileText className="w-8 h-8 text-gray-600 group-hover:text-accent/50 transition-colors" />
-                                  <span className="text-[10px] font-black text-gray-600 uppercase tracking-widest">
+                                  <FileText className="w-8 h-8 text-muted-foreground group-hover:text-accent/50 transition-colors" />
+                                  <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
                                     {file.filename.split('.').pop()}
                                   </span>
                                 </div>
@@ -1616,16 +1616,16 @@ export default function CardDetailModal({
                             <div className="p-4 flex items-center gap-4">
                               <div className="w-10 h-10 rounded-xl bg-[var(--surface-1)] flex items-center justify-center flex-shrink-0 group-hover:bg-accent/10 transition-colors border border-[var(--surface-border)] group-hover:border-accent/20">
                                 {isImage ? (
-                                  <ImageIcon className="w-4 h-4 text-gray-500 group-hover:text-accent" />
+                                  <ImageIcon className="w-4 h-4 text-muted-foreground group-hover:text-accent" />
                                 ) : (
-                                  <Paperclip className="w-4 h-4 text-gray-500 group-hover:text-accent" />
+                                  <Paperclip className="w-4 h-4 text-muted-foreground group-hover:text-accent" />
                                 )}
                               </div>
                               <div className="flex-1 min-w-0">
-                                <p className="text-xs font-black text-gray-300 truncate group-hover:text-accent transition-colors">
+                                <p className="text-xs font-semibold text-foreground truncate group-hover:text-accent transition-colors">
                                   {file.filename}
                                 </p>
-                                <p className="text-[10px] text-gray-500 uppercase font-black mt-1 tracking-wider">
+                                <p className="text-[11px] text-muted-foreground uppercase font-semibold mt-1 tracking-wider">
                                   {(file.file_size / 1024).toFixed(0)} KB
                                 </p>
                               </div>
@@ -1643,7 +1643,7 @@ export default function CardDetailModal({
                                 });
                               }
                             }}
-                            className="absolute top-2 right-2 p-2 rounded-lg bg-black/50 text-white/50 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all backdrop-blur-sm border border-white/10"
+                            className="absolute top-2 right-2 p-2 rounded-lg bg-black/50 text-foreground/50 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all backdrop-blur-sm border border-foreground/10"
                           >
                             <Trash2 size={14} />
                           </button>
@@ -1657,16 +1657,16 @@ export default function CardDetailModal({
               {/* Comments Section */}
               <section className="space-y-8 pt-8 border-t border-[var(--surface-border)]/40">
                 <div className="flex items-center gap-4">
-                  <div className="p-2.5 rounded-xl bg-white/5 border border-white/5 shadow-inner">
-                    <MessageSquare className="w-5 h-5 text-gray-400" />
+                  <div className="p-2.5 rounded-xl bg-foreground/5 border border-foreground/5 shadow-inner">
+                    <MessageSquare className="w-5 h-5 text-muted-foreground" />
                   </div>
-                  <h3 className="font-bold text-xl text-gray-200 tracking-tight">Comentários</h3>
+                  <h3 className="font-bold text-xl text-foreground tracking-tight">Comentários</h3>
                 </div>
                 
                 <div className={cn("transition-all duration-500 space-y-8", isMaximized ? "pl-10" : "pl-10")}>
                   <div className="flex gap-6">
                     <Avatar className="w-12 h-12 flex-shrink-0 border-2 border-accent/20 shadow-lg shadow-accent/5">
-                      <AvatarFallback className="bg-accent text-accent-foreground text-sm font-black uppercase">
+                      <AvatarFallback className="bg-accent text-accent-foreground text-sm font-semibold uppercase">
                         {currentUser?.name?.charAt(0).toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
@@ -1675,14 +1675,14 @@ export default function CardDetailModal({
                         value={newComment}
                         onChange={(e) => setNewComment(e.target.value)}
                         placeholder="Escreva um comentário ou anote algo importante..."
-                        className="w-full bg-[var(--surface-3)]/50 border border-[var(--surface-border)] rounded-2xl p-6 text-sm leading-relaxed text-gray-300 focus:border-accent/40 focus:ring-1 focus:ring-accent/20 transition-all outline-none resize-none min-h-[120px] shadow-inner"
+                        className="w-full bg-[var(--surface-3)]/50 border border-[var(--surface-border)] rounded-2xl p-6 text-sm leading-relaxed text-foreground focus:border-accent/40 focus:ring-1 focus:ring-accent/20 transition-all outline-none resize-none min-h-[120px] shadow-inner"
                       />
                       <div className="flex justify-end">
                         <Button 
                           onClick={handleAddComment} 
                           disabled={!newComment.trim()} 
                           size="sm" 
-                          className="bg-accent hover:bg-accent/90 px-10 h-12 rounded-full font-black text-xs shadow-lg shadow-accent/20 transition-all active:scale-95"
+                          className="bg-accent hover:bg-accent/90 px-10 h-12 rounded-full font-semibold text-xs shadow-lg shadow-accent/20 transition-all active:scale-95"
                         >
                           <Send className="w-4 h-4 mr-3" /> Enviar Comentário
                         </Button>
@@ -1694,24 +1694,24 @@ export default function CardDetailModal({
                     {comments?.map((comment: any) => (
                       <div key={comment.id} className="flex gap-6 group">
                         <Avatar className="w-12 h-12 flex-shrink-0 border-2 border-[var(--surface-border)] shadow-md transition-transform group-hover:scale-105">
-                          <AvatarFallback className="bg-[var(--surface-2)] text-gray-400 text-sm font-black uppercase">
+                          <AvatarFallback className="bg-[var(--surface-2)] text-muted-foreground text-sm font-semibold uppercase">
                             {comment.userName?.charAt(0).toUpperCase()}
                           </AvatarFallback>
                         </Avatar>
                         <div className="flex-1 space-y-3.5 min-w-0">
                           <div className="flex items-center gap-4">
-                            <span className="text-sm font-black text-gray-200">{comment.userName}</span>
-                            <span className="text-[10px] text-gray-500 font-bold bg-[var(--surface-3)] px-3 py-1 rounded-md border border-[var(--surface-border)]/50">
+                            <span className="text-sm font-semibold text-foreground">{comment.userName}</span>
+                            <span className="text-[11px] text-muted-foreground font-bold bg-[var(--surface-3)] px-3 py-1 rounded-md border border-[var(--surface-border)]/50">
                               {format(new Date(comment.created_at), "dd 'de' MMM, HH:mm", { locale: ptBR })}
                             </span>
                           </div>
-                          <div className="bg-[var(--surface-3)]/80 p-6 rounded-3xl rounded-tl-none text-sm text-gray-300 border border-[var(--surface-border)]/40 shadow-sm leading-relaxed break-words relative ring-1 ring-white/5">
+                          <div className="bg-[var(--surface-3)]/80 p-6 rounded-3xl rounded-tl-none text-sm text-foreground border border-[var(--surface-border)]/40 shadow-sm leading-relaxed break-words relative ring-1 ring-foreground/5">
                             {comment.content}
                           </div>
                           {(comment.user_id === currentUser?.id || currentUser?.role === 'admin') && (
                             <button 
                               onClick={() => handleDeleteComment(comment.id)}
-                              className="text-[10px] text-gray-500 hover:text-red-400 transition-all opacity-0 group-hover:opacity-100 font-black ml-4 uppercase tracking-widest"
+                              className="text-[11px] text-muted-foreground hover:text-red-400 transition-all opacity-0 group-hover:opacity-100 font-semibold ml-4 uppercase tracking-widest"
                             >
                               Excluir Registro
                             </button>
@@ -1731,15 +1731,15 @@ export default function CardDetailModal({
             )}>
               <div className="bg-[var(--surface-3)]/80 p-5 rounded-2xl border border-[var(--surface-border)]/60 h-fit shadow-xl backdrop-blur-sm space-y-6">
                 <div className="space-y-6">
-                  <h4 className="text-[11px] font-black text-gray-500 uppercase tracking-[0.2em] flex items-center gap-3">
-                    <LayoutGrid size={14} className="text-gray-600" /> Ações Rápidas
+                  <h4 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.2em] flex items-center gap-3">
+                    <LayoutGrid size={14} className="text-muted-foreground" /> Ações Rápidas
                   </h4>
                     <div className="flex flex-col gap-3">
                     <Button 
                       variant="ghost" 
                       size="sm" 
                       onClick={() => setIsMirrorDialogOpen(true)}
-                      className="bg-[var(--surface-2)] hover:bg-[var(--surface-border)] text-gray-200 justify-start h-11 px-4 rounded-xl text-[10px] font-black transition-all border border-[var(--surface-border)]/50 hover:border-accent/30 shadow-sm w-full"
+                      className="bg-[var(--surface-2)] hover:bg-[var(--surface-border)] text-foreground justify-start h-11 px-4 rounded-xl text-[11px] font-semibold transition-all border border-[var(--surface-border)]/50 hover:border-accent/30 shadow-sm w-full"
                     >
                       <Copy className="w-3.5 h-3.5 mr-3 text-accent flex-shrink-0" /> <span className="truncate">{isEnglish ? "Mirror Card" : "Espelhar Cartão"}</span>
                     </Button>
@@ -1747,7 +1747,7 @@ export default function CardDetailModal({
                       variant="ghost" 
                       size="sm" 
                       onClick={handleArchiveCard}
-                      className="bg-[var(--surface-2)] hover:bg-amber-950/20 hover:text-amber-400 text-gray-200 justify-start h-11 px-4 rounded-xl text-[10px] font-black transition-all border border-[var(--surface-border)]/50 hover:border-amber-400/30 shadow-sm w-full"
+                      className="bg-[var(--surface-2)] hover:bg-amber-950/20 hover:text-amber-400 text-foreground justify-start h-11 px-4 rounded-xl text-[11px] font-semibold transition-all border border-[var(--surface-border)]/50 hover:border-amber-400/30 shadow-sm w-full"
                     >
                       <Archive className="w-3.5 h-3.5 mr-3 text-amber-500 flex-shrink-0" /> <span className="truncate">{isEnglish ? "Archive Card" : "Arquivar Cartão"}</span>
                     </Button>
@@ -1756,7 +1756,7 @@ export default function CardDetailModal({
                         variant="ghost" 
                         size="sm" 
                         onClick={handleDeleteCard}
-                        className="hover:bg-red-950/30 text-red-400/70 hover:text-red-400 justify-start h-11 px-4 rounded-xl text-[10px] font-black transition-all w-full"
+                        className="hover:bg-red-950/30 text-red-400/70 hover:text-red-400 justify-start h-11 px-4 rounded-xl text-[11px] font-semibold transition-all w-full"
                       >
                         <Trash className="w-3.5 h-3.5 mr-3 flex-shrink-0" /> <span className="truncate">{isEnglish ? "Delete Permanently" : "Excluir Permanentemente"}</span>
                       </Button>
@@ -1768,10 +1768,10 @@ export default function CardDetailModal({
 
                 {mirrors && mirrors.length > 0 && (
                   <div className="space-y-5">
-                    <h4 className="text-[11px] font-black text-gray-500 uppercase tracking-[0.2em]">Conexões Ativas</h4>
+                    <h4 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.2em]">Conexões Ativas</h4>
                     <div className="space-y-3">
                       {mirrors.map((m: any) => (
-                        <div key={m.boardId} className="flex items-center gap-3 text-[10px] text-accent font-black bg-accent/10 px-4 py-3 rounded-xl border border-accent/20 shadow-sm shadow-accent/5 w-full overflow-hidden">
+                        <div key={m.boardId} className="flex items-center gap-3 text-[11px] text-accent font-semibold bg-accent/10 px-4 py-3 rounded-xl border border-accent/20 shadow-sm shadow-accent/5 w-full overflow-hidden">
                           <div className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse flex-shrink-0" />
                           <span className="truncate">{m.boardName}</span>
                         </div>
@@ -1781,11 +1781,11 @@ export default function CardDetailModal({
                 )}
 
                 {/* Info Card (Visible in sidebar) */}
-                <div className="bg-white/[0.02] p-4 rounded-2xl border border-white/[0.05] space-y-4">
+                <div className="bg-foreground/[0.02] p-4 rounded-2xl border border-foreground/[0.05] space-y-4">
                   <div className="space-y-1.5">
-                    <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest block">Situação Atual</span>
+                    <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest block">Situação Atual</span>
                     <div className={cn(
-                      "inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter",
+                      "inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold uppercase tracking-tighter",
                       card?.status === "completed" ? "bg-green-500/10 text-green-500" : "bg-blue-500/10 text-blue-400"
                     )}>
                       <div className={cn("w-1 h-1 rounded-full mr-2", card?.status === "completed" ? "bg-green-500" : "bg-blue-400")} />
@@ -1794,14 +1794,14 @@ export default function CardDetailModal({
                   </div>
 
                   {card?.linkedBoards && card.linkedBoards.length > 0 && (
-                    <div className="space-y-2.5 pt-2 border-t border-white/[0.05]">
-                      <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest block">Quadros Vinculados</span>
+                    <div className="space-y-2.5 pt-2 border-t border-foreground/[0.05]">
+                      <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest block">Quadros Vinculados</span>
                       <div className="grid gap-2">
                         {card.linkedBoards.map((b: any) => (
                           <div key={b.id} className="flex items-center justify-between gap-2 group/link">
-                            <span className="text-[10px] font-black text-gray-300 truncate max-w-[120px]">{b.name}</span>
+                            <span className="text-[11px] font-semibold text-foreground truncate max-w-[120px]">{b.name}</span>
                             <span className={cn(
-                              "text-[8px] font-bold px-1.5 py-0.5 rounded uppercase tracking-tighter",
+                              "text-[11px] font-bold px-1.5 py-0.5 rounded uppercase tracking-tighter",
                               b.type === "Matriz" ? "bg-purple-500/10 text-purple-400" : "bg-amber-500/10 text-amber-400"
                             )}>
                               {b.type}
@@ -1812,24 +1812,24 @@ export default function CardDetailModal({
                     </div>
                   )}
 
-                  <div className="pt-2 border-t border-white/[0.05] space-y-2.5">
+                  <div className="pt-2 border-t border-foreground/[0.05] space-y-2.5">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest flex-shrink-0">Responsável</span>
-                      <span className="text-[9px] font-black text-gray-300 truncate">
+                      <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest flex-shrink-0">Responsável</span>
+                      <span className="text-[11px] font-semibold text-foreground truncate">
                         {card?.assignedToName || "Nenhum"}
                       </span>
                     </div>
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest flex-shrink-0">Criado em</span>
-                      <span className="text-[9px] font-black text-gray-300 truncate">
+                      <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest flex-shrink-0">Criado em</span>
+                      <span className="text-[11px] font-semibold text-foreground truncate">
                         {card?.created_at ? format(new Date(card.created_at), "dd/MM/yyyy") : "-"}
                       </span>
                     </div>
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-[9px] font-bold text-gray-500 uppercase tracking-widest flex-shrink-0">Data de Entrega</span>
+                      <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest flex-shrink-0">Data de Entrega</span>
                       <span className={cn(
-                        "text-[9px] font-black truncate",
-                        isOverdue ? "text-red-400" : "text-gray-300"
+                        "text-[11px] font-semibold truncate",
+                        isOverdue ? "text-red-400" : "text-foreground"
                       )}>
                         {(card?.dueDate || projectDates?.end_date) 
                           ? format(new Date(card?.dueDate || projectDates?.end_date), "dd/MM/yyyy") 
@@ -1845,22 +1845,22 @@ export default function CardDetailModal({
 
         {/* Mirror Selection Modal */}
         <Dialog open={isMirrorDialogOpen} onOpenChange={setIsMirrorDialogOpen}>
-          <DialogContent className="bg-[var(--surface-1)] text-white border-[var(--surface-border)] max-w-md rounded-2xl shadow-2xl">
+          <DialogContent className="bg-[var(--surface-1)] text-foreground border-[var(--surface-border)] max-w-md rounded-2xl shadow-2xl">
             <DialogHeader className="space-y-2">
-              <DialogTitle className="text-xl font-black">Espelhar este Cartão</DialogTitle>
-              <p className="text-xs text-gray-400 font-medium leading-relaxed">Crie uma cópia sincronizada em tempo real deste cartão em outro quadro estratégico.</p>
+              <DialogTitle className="text-xl font-semibold">Espelhar este Cartão</DialogTitle>
+              <p className="text-xs text-muted-foreground font-medium leading-relaxed">Crie uma cópia sincronizada em tempo real deste cartão em outro quadro estratégico.</p>
             </DialogHeader>
             <div className="space-y-5 py-6">
               <div className="space-y-2.5">
-                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Quadro de Destino</label>
+                <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">Quadro de Destino</label>
                 <Select value={selectedBoardId} onValueChange={(val) => {
                   setSelectedBoardId(val);
                   setSelectedListId("");
                 }}>
-                  <SelectTrigger className="bg-[var(--surface-2)] border border-[var(--surface-border)] text-white h-12 rounded-xl px-4 font-bold focus:ring-accent">
+                  <SelectTrigger className="bg-[var(--surface-2)] border border-[var(--surface-border)] text-foreground h-12 rounded-xl px-4 font-bold focus:ring-accent">
                     <SelectValue placeholder="Selecione um quadro..." />
                   </SelectTrigger>
-                  <SelectContent className="bg-[var(--surface-1)] border-[var(--surface-border)] text-white rounded-xl">
+                  <SelectContent className="bg-[var(--surface-1)] border-[var(--surface-border)] text-foreground rounded-xl">
                     {userBoards?.map(board => (
                       <SelectItem key={board.id} value={board.id.toString()} className="font-bold py-3">{board.name}</SelectItem>
                     ))}
@@ -1869,12 +1869,12 @@ export default function CardDetailModal({
               </div>
 
               <div className="space-y-2.5">
-                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Lista de Destino</label>
+                <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">Lista de Destino</label>
                 <Select value={selectedListId} onValueChange={setSelectedListId} disabled={!selectedBoardId}>
-                  <SelectTrigger className="bg-[var(--surface-2)] border border-[var(--surface-border)] text-white h-12 rounded-xl px-4 font-bold focus:ring-accent disabled:opacity-50">
+                  <SelectTrigger className="bg-[var(--surface-2)] border border-[var(--surface-border)] text-foreground h-12 rounded-xl px-4 font-bold focus:ring-accent disabled:opacity-50">
                     <SelectValue placeholder="Escolha uma coluna..." />
                   </SelectTrigger>
-                  <SelectContent className="bg-[var(--surface-1)] border-[var(--surface-border)] text-white rounded-xl">
+                  <SelectContent className="bg-[var(--surface-1)] border-[var(--surface-border)] text-foreground rounded-xl">
                     {targetLists?.map(list => (
                       <SelectItem key={list.id} value={list.id.toString()} className="font-bold py-3">{list.name}</SelectItem>
                     ))}
@@ -1883,10 +1883,10 @@ export default function CardDetailModal({
               </div>
             </div>
             <DialogFooter className="gap-3 pt-2">
-              <Button variant="ghost" onClick={() => setIsMirrorDialogOpen(false)} className="text-xs font-black uppercase tracking-widest h-11 px-6 rounded-xl">Cancelar</Button>
+              <Button variant="ghost" onClick={() => setIsMirrorDialogOpen(false)} className="text-xs font-semibold uppercase tracking-widest h-11 px-6 rounded-xl">Cancelar</Button>
               <Button 
                 onClick={handleCreateMirror} 
-                className="bg-accent hover:bg-accent/90 text-xs font-black uppercase tracking-widest px-8 h-11 rounded-xl shadow-lg shadow-accent/20 transition-all active:scale-95"
+                className="bg-accent hover:bg-accent/90 text-xs font-semibold uppercase tracking-widest px-8 h-11 rounded-xl shadow-lg shadow-accent/20 transition-all active:scale-95"
                 disabled={createMirrorMutation.isPending || !selectedListId}
               >
                 {createMirrorMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Confirmar Espelhamento"}

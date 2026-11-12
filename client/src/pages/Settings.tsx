@@ -574,7 +574,7 @@ function ProfileSettings({ user }: { user: any }) {
                 <p className="text-xs text-muted-foreground mt-2">
                   {isEnglish
                     ? "Dark mode uses soft neutrals with your brand purple and lime accents — easy on the eyes for long sessions."
-                    : "O modo escuro usa tons neutros suaves com o roxo e o verde-limão da marca — confortável para uso prolongado."}
+                    : "O modo escuro usa azul-marinho com o ciano da marca — confortável para uso prolongado."}
                 </p>
               </div>
             )}
