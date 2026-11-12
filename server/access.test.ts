@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  * Testes de autorização (isolamento por tenant).
  * O Supabase é substituído por tabelas em memória: nada toca o banco real.
  */
-const { tables, fakeSupabase, dataClientSignIn, authClientSignIn, createAuthClient } = vi.hoisted(() => {
+const { tables, fakeSupabase, dataClientSignIn, authClientSignIn, createAuthClient, authAdmin } = vi.hoisted(() => {
   const tables: Record<string, any[]> = {};
   const state = { seq: 90000 };
 
@@ -63,12 +63,35 @@ const { tables, fakeSupabase, dataClientSignIn, authClientSignIn, createAuthClie
 
   // Cliente de dados (service role): login nele trocaria a identidade das consultas.
   const dataClientSignIn = vi.fn();
+  // Contas de login (Supabase Auth) em memória.
+  const authAdmin = {
+    accounts: [] as Array<{ id: string; email: string; password: string; user_metadata: any }>,
+    failInsert: false,
+    createUser: async ({ email, password, user_metadata }: any) => {
+      if (authAdmin.accounts.some((a) => a.email === email)) {
+        return { data: { user: null }, error: { message: "User already registered" } };
+      }
+      const account = { id: `auth-${authAdmin.accounts.length + 1}`, email, password, user_metadata };
+      authAdmin.accounts.push(account);
+      return { data: { user: account }, error: null };
+    },
+    deleteUser: async (id: string) => {
+      authAdmin.accounts = authAdmin.accounts.filter((a) => a.id !== id);
+      return { data: {}, error: null };
+    },
+    updateUserById: async (id: string, patch: any) => {
+      const account = authAdmin.accounts.find((a) => a.id === id);
+      if (account) Object.assign(account, patch);
+      return { data: { user: account }, error: null };
+    },
+  };
   const fakeSupabase = {
     from: (table: string) => new Query(table),
     auth: {
       getUser: async () => ({ data: { user: null }, error: null }),
       signInWithPassword: dataClientSignIn,
       signUp: dataClientSignIn,
+      admin: authAdmin,
     },
   };
   // Cliente descartável usado só para autenticar.
@@ -77,7 +100,7 @@ const { tables, fakeSupabase, dataClientSignIn, authClientSignIn, createAuthClie
     error: null,
   }));
   const createAuthClient = vi.fn(() => ({ auth: { signInWithPassword: authClientSignIn } }));
-  return { tables, fakeSupabase, dataClientSignIn, authClientSignIn, createAuthClient };
+  return { tables, fakeSupabase, dataClientSignIn, authClientSignIn, createAuthClient, authAdmin };
 });
 
 vi.mock("./_core/supabase.js", () => ({ supabase: fakeSupabase, createAuthClient }));
@@ -90,6 +113,7 @@ const TENANT_B = "bbbbbbbb-0000-0000-0000-000000000002";
 
 function seed() {
   for (const key of Object.keys(tables)) delete tables[key];
+  authAdmin.accounts = [];
   tables.users = [
     { id: 1, username: "alice", role: "user", tenant_id: TENANT_A },
     { id: 2, username: "admin-a", role: "admin", tenant_id: TENANT_A },
@@ -495,5 +519,99 @@ describe("empresa do recurso (multi-tenant)", () => {
 
     await callerFor(5).cardDetails.addComment({ cardId: 2000, content: "ok" });
     expect(tables.card_comments[0].tenant_id).toBe(TENANT_B);
+  });
+});
+
+describe("admin.users — cadastro segregado por empresa", () => {
+  const SENHA = "frase longa de teste";
+
+  beforeEach(() => {
+    tables.tenants = [{ id: TENANT_A, name: "Empresa A" }, { id: TENANT_B, name: "Empresa B" }];
+  });
+
+  it("administrador cria usuário somente na própria empresa", async () => {
+    const { id } = await callerFor(2).admin.users.create({ username: "Novo@A.com", password: SENHA, name: "Novo", role: "user" });
+    const row = tables.users.find((u) => u.id === id);
+    expect(row).toMatchObject({ username: "novo@a.com", tenant_id: TENANT_A, role: "user" });
+    expect(tables.user_tenants.find((t) => t.user_id === id)).toMatchObject({ tenant_id: TENANT_A, role: "member" });
+
+    await expect(
+      callerFor(2).admin.users.create({ username: "invasor@b.com", password: SENHA, tenantId: TENANT_B })
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(tables.users.some((u) => u.username === "invasor@b.com")).toBe(false);
+    expect(authAdmin.accounts.some((a) => a.email === "invasor@b.com")).toBe(false);
+  });
+
+  it("administrador define se o novo usuário é administrador ou comum", async () => {
+    const { id } = await callerFor(2).admin.users.create({ username: "chefe@a.com", password: SENHA, role: "admin" });
+    expect(tables.users.find((u) => u.id === id).role).toBe("admin");
+    expect(tables.user_tenants.find((t) => t.user_id === id).role).toBe("admin");
+  });
+
+  it("ninguém cria super administrador por esta rota", async () => {
+    await expect(
+      callerFor(5).admin.users.create({ username: "raiz2@a.com", password: SENHA, role: "master_admin" as any, tenantId: TENANT_A })
+    ).rejects.toBeTruthy();
+    expect(tables.users.some((u) => u.username === "raiz2@a.com")).toBe(false);
+  });
+
+  it("super administrador escolhe a empresa e ela precisa existir", async () => {
+    const { id } = await callerFor(5).admin.users.create({ username: "novo@b.com", password: SENHA, role: "admin", tenantId: TENANT_B });
+    expect(tables.users.find((u) => u.id === id)).toMatchObject({ tenant_id: TENANT_B, role: "admin" });
+
+    await expect(callerFor(5).admin.users.create({ username: "semempresa@x.com", password: SENHA })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(
+      callerFor(5).admin.users.create({ username: "fantasma@x.com", password: SENHA, tenantId: "cccccccc-0000-0000-0000-000000000003" })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(authAdmin.accounts.map((a) => a.email)).toEqual(["novo@b.com"]);
+  });
+
+  it("usuário comum e usuário sem empresa não criam ninguém", async () => {
+    await expect(callerFor(1).admin.users.create({ username: "x@a.com", password: SENHA })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(callerFor(6).admin.users.create({ username: "y@a.com", password: SENHA })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(callerFor(1).admin.users.list()).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("aplica a política de senha e recusa login repetido", async () => {
+    await expect(callerFor(2).admin.users.create({ username: "curta@a.com", password: "123456" })).rejects.toBeTruthy();
+    await expect(
+      callerFor(2).admin.users.create({ username: "mariana@a.com", password: "mariana-2026!" })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(callerFor(2).admin.users.create({ username: "alice", password: SENHA })).rejects.toMatchObject({ code: "CONFLICT" });
+    expect(authAdmin.accounts).toHaveLength(0);
+  });
+
+  it("papel e empresa não vão para user_metadata e a criação é auditada", async () => {
+    const { id } = await callerFor(2).admin.users.create({ username: "audit@a.com", password: SENHA, role: "admin" });
+    expect(authAdmin.accounts[0].user_metadata).toEqual({ name: "audit@a.com" });
+    expect(tables.audit_logs.find((l) => l.entity_type === "user" && l.entity_id === id)).toMatchObject({
+      action: "create",
+      tenant_id: TENANT_A,
+      user_id: 2,
+    });
+  });
+
+  it("listagem: administrador vê só a própria empresa, sem o super administrador", async () => {
+    const listA = await callerFor(2).admin.users.list();
+    expect(listA.map((u) => u.id).sort()).toEqual([1, 2]);
+    const all = await callerFor(5).admin.users.list();
+    expect(all.length).toBe(tables.users.length);
+    expect(all.find((u) => u.id === 3)?.tenantName).toBe("Empresa B");
+  });
+
+  it("troca de senha e remoção alcançam a conta de login", async () => {
+    const { id } = await callerFor(2).admin.users.create({ username: "sai@a.com", password: SENHA });
+    await callerFor(2).admin.users.update({ id, password: "outra frase bem longa" });
+    expect(authAdmin.accounts[0].password).toBe("outra frase bem longa");
+    await callerFor(2).admin.users.delete({ id });
+    expect(authAdmin.accounts).toHaveLength(0);
+    expect(tables.users.some((u) => u.id === id)).toBe(false);
+  });
+
+  it("quadro só recebe membro da mesma empresa", async () => {
+    await expect(callerFor(5).admin.boards.addMember({ boardId: 10, userId: 3, role: "viewer" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(callerFor(5).boards.addMember({ boardId: 10, userId: 3, role: "viewer" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await callerFor(2).admin.boards.addMember({ boardId: 10, userId: 1, role: "editor" });
+    expect(tables.board_members.find((m) => m.board_id === 10 && m.user_id === 1)?.role).toBe("editor");
   });
 });

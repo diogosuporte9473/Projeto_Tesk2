@@ -9,15 +9,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, Trash2, Shield, BarChart2, History as HistoryIcon, Search, Filter, Download, User as UserIcon, Calendar as CalendarIcon, ArrowLeft, ArrowRight } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import UserManagement from "@/components/UserManagement";
 import { format, formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 export default function Admin() {
   const { user } = useAuth();
-  const [newUserName, setNewUserName] = useState("");
-  const [newUserPassword, setNewUserPassword] = useState("");
-  const [newName, setNewName] = useState("");
   const [selectedBoardId, setSelectedBoardId] = useState<number | null>(null);
+  const isAdminLike = user?.role === "admin" || user?.role === "master_admin";
 
   // Filtros de Log
   const [logPage, setLogPage] = useState(1);
@@ -28,14 +27,14 @@ export default function Admin() {
   // Queries
   const { data: stats } = trpc.stats.getGeneral.useQuery(
     undefined,
-    { enabled: user?.role === "admin" } as any
+    { enabled: isAdminLike } as any
   );
 
-  const { data: users, isLoading: usersLoading } = trpc.admin.users.list.useQuery();
+  const { data: users } = trpc.admin.users.list.useQuery(undefined, { enabled: isAdminLike } as any);
   const { data: boards } = trpc.boards.listAll.useQuery();
   const { data: boardMembers, isLoading: membersLoading } = trpc.boards.getMembers.useQuery(
     { boardId: selectedBoardId || 0 },
-    { enabled: !!selectedBoardId && user?.role === "admin" } as any
+    { enabled: !!selectedBoardId && isAdminLike } as any
   );
 
   // Query de Logs
@@ -45,11 +44,9 @@ export default function Admin() {
     search: logSearch || undefined,
     action: logAction === "all" ? undefined : logAction,
     startDate: logDays === "all" ? undefined : new Date(Date.now() - parseInt(logDays) * 24 * 60 * 60 * 1000).toISOString(),
-  }, { enabled: user?.role === "admin" } as any);
+  }, { enabled: isAdminLike } as any);
 
   // Mutations
-  const createUserMutation = trpc.admin.users.create.useMutation();
-  const updateRoleMutation = trpc.admin.users.update.useMutation();
   const grantPermissionMutation = trpc.admin.boards.addMember.useMutation();
   const revokePermissionMutation = trpc.admin.boards.removeMember.useMutation();
 
@@ -62,39 +59,6 @@ export default function Admin() {
       </TrelloDashboardLayout>
     );
   }
-
-  const handleCreateUser = async () => {
-    if (!newUserName.trim() || !newUserPassword.trim() || !newName.trim()) {
-      toast.error("Usuário, senha e nome são obrigatórios");
-      return;
-    }
-
-    try {
-      await createUserMutation.mutateAsync({
-        username: newUserName,
-        password: newUserPassword,
-        name: newName,
-      });
-      setNewUserName("");
-      setNewUserPassword("");
-      setNewName("");
-      toast.success("Usuário criado com sucesso");
-    } catch (error) {
-      toast.error("Erro ao criar usuário");
-    }
-  };
-
-  const handleUpdateRole = async (id: number, role: "admin" | "user") => {
-    try {
-      await updateRoleMutation.mutateAsync({
-        id,
-        role,
-      });
-      toast.success("Função atualizada");
-    } catch (error) {
-      toast.error("Erro ao atualizar função");
-    }
-  };
 
   const handleGrantPermission = async (userId: number, role: "viewer" | "editor" | "admin") => {
     if (!selectedBoardId) return;
@@ -125,6 +89,13 @@ export default function Admin() {
     }
   };
 
+  // Um quadro só recebe membros da própria empresa.
+  const selectedBoard = (boards as any[] | undefined)?.find((b) => b.id === selectedBoardId);
+  const selectedBoardTenant = selectedBoard?.tenantId ?? selectedBoard?.tenant_id ?? null;
+  const boardUsers = ((users as any[]) || []).filter(
+    (u) => u.role !== "master_admin" && (!selectedBoardTenant || u.tenantId === selectedBoardTenant)
+  );
+
   const exportLogsToCSV = () => {
     if (!auditData?.logs) return;
 
@@ -152,10 +123,10 @@ export default function Admin() {
 
   return (
     <TrelloDashboardLayout>
-      <div className="p-8">
-        <div className="mb-8 flex justify-between items-start">
+      <div className="p-4 sm:p-8">
+        <div className="mb-6 flex flex-wrap justify-between items-start gap-3 sm:mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-foreground mb-2">Painel Administrativo</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">Painel Administrativo</h1>
             <p className="text-muted-foreground">Gerenciar usuários, permissões e auditar atividades do sistema</p>
           </div>
           <div className="flex gap-4">
@@ -167,7 +138,7 @@ export default function Admin() {
         </div>
 
         <Tabs defaultValue="users" className="w-full">
-          <TabsList className="grid w-full max-w-2xl grid-cols-4 mb-8">
+          <TabsList className="grid h-auto w-full max-w-2xl grid-cols-2 gap-1 mb-6 sm:grid-cols-4 sm:mb-8">
             <TabsTrigger value="users">Usuários</TabsTrigger>
             <TabsTrigger value="permissions">Permissões</TabsTrigger>
             <TabsTrigger value="stats">Estatísticas</TabsTrigger>
@@ -364,74 +335,7 @@ export default function Admin() {
 
           {/* Aba de Usuários */}
           <TabsContent value="users" className="space-y-6">
-            <Card className="p-6">
-              <h2 className="text-xl font-semibold text-foreground mb-4">Adicionar Novo Usuário</h2>
-              <div className="space-y-4">
-                <Input
-                  placeholder="Usuário (Email)"
-                  value={newUserName}
-                  onChange={(e) => setNewUserName(e.target.value)}
-                  className="bg-background border-border"
-                />
-                <Input
-                  placeholder="Senha"
-                  value={newUserPassword}
-                  onChange={(e) => setNewUserPassword(e.target.value)}
-                  type="password"
-                  className="bg-background border-border"
-                />
-                <Input
-                  placeholder="Nome Completo"
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  className="bg-background border-border"
-                />
-                <Button
-                  onClick={handleCreateUser}
-                  disabled={createUserMutation.isPending}
-                  className="w-full bg-accent text-accent-foreground hover:bg-accent/90"
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Adicionar Usuário
-                </Button>
-              </div>
-            </Card>
-
-            <Card className="p-6">
-              <h2 className="text-xl font-semibold text-foreground mb-4">Lista de Usuários</h2>
-              {usersLoading ? (
-                <div className="space-y-2">
-                  {[1, 2, 3].map((i) => (
-                    <div key={i} className="h-12 bg-muted rounded animate-pulse" />
-                  ))}
-                </div>
-              ) : users && users.length > 0 ? (
-                <div className="space-y-3">
-                  {users.map((u) => (
-                    <div key={u.id} className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                      <div>
-                        <p className="font-medium text-foreground">{u.name}</p>
-                        <p className="text-sm text-muted-foreground">{u.username}</p>
-                      </div>
-                      <Select
-                        value={u.role}
-                        onValueChange={(value) => handleUpdateRole(u.id, value as "admin" | "user")}
-                      >
-                        <SelectTrigger className="w-32 bg-background border-border">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="user">Usuário</SelectItem>
-                          <SelectItem value="admin">Admin</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-muted-foreground">Nenhum usuário encontrado</p>
-              )}
-            </Card>
+            <UserManagement />
           </TabsContent>
 
           {/* Aba de Permissões */}
@@ -466,7 +370,7 @@ export default function Admin() {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {users?.map((u: any) => {
+                    {boardUsers.map((u: any) => {
                       const member = (boardMembers as any[])?.find((m: any) => m.userId === u.id);
                       return (
                         <div key={u.id} className="flex items-center justify-between p-3 bg-muted rounded-lg">

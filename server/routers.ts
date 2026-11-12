@@ -55,6 +55,36 @@ import { TRIGGER_TYPES, CONDITION_OPS, NOTIFY_TARGETS } from "../shared/automati
 import { runAutomations, runScheduledAutomations } from "./automations.js";
 
 /**
+ * Política de senha para contas criadas ou redefinidas por administradores:
+ * comprimento (10 a 72) em vez de regras de composição, e nada de senha igual
+ * ao login. 72 é o limite do bcrypt.
+ */
+const userPasswordSchema = z
+  .string()
+  .min(10, "A senha precisa ter pelo menos 10 caracteres")
+  .max(72, "A senha pode ter no máximo 72 caracteres");
+
+function assertPasswordNotObvious(password: string, username: string) {
+  const pass = password.toLowerCase();
+  const login = username.toLowerCase();
+  const local = login.split("@")[0];
+  if (pass === login || (local.length >= 4 && pass.includes(local))) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "A senha não pode conter o login do usuário" });
+  }
+}
+
+/**
+ * Um quadro só recebe como membro quem é da mesma empresa do quadro.
+ */
+async function assertSameTenantMember(boardId: number, userId: number) {
+  const boardTenant = await tenantOf("board", boardId);
+  const { data: member } = await supabase.from("users").select("id, tenant_id").eq("id", userId).maybeSingle();
+  if (!member || member.tenant_id !== boardTenant) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "O usuário precisa ser da mesma empresa do quadro" });
+  }
+}
+
+/**
  * Função utilitária para registrar logs de auditoria
  */
 async function createAuditLog({
@@ -946,6 +976,7 @@ export const appRouter = router({
         if (board.ownerId !== ctx.user.id && !isTenantAdmin(ctx.user)) {
           throw new TRPCError({ code: "FORBIDDEN", message: "Only board owner or admin can add members" });
         }
+        await assertSameTenantMember(input.boardId, input.userId);
 
         const { error } = await supabase.from("board_members").upsert({
           board_id: input.boardId,
@@ -3250,99 +3281,131 @@ export const appRouter = router({
 
   admin: router({ 
     users: router({
+      // Segregação: o administrador vê só a própria empresa (e nunca o super
+      // administrador); o super administrador vê todas, com o nome da empresa.
       list: protectedProcedure.query(async ({ ctx }) => {
-        const db = await getDb();
-        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database connection failed' });
+        if (!isTenantAdmin(ctx.user)) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'Acesso negado' });
+        }
+        const isMaster = ctx.user.role === 'master_admin';
+        if (!isMaster && !ctx.user.tenantId) return [];
 
-        // MASTER_ADMIN vê todos os usuários do sistema
-        if (ctx.user.role === 'master_admin') {
-          const results = await db.select({
-            id: users.id,
-            username: users.username,
-            name: users.name,
-            role: users.role,
-            createdAt: users.createdAt
-          }).from(users).orderBy(users.name);
-          return results;
+        let query = supabase.from("users").select("id, username, name, role, tenant_id, created_at");
+        if (!isMaster) query = query.eq("tenant_id", ctx.user.tenantId);
+        const { data, error } = await query.order("name");
+        if (error) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: error.message });
+
+        const tenantNames = new Map<string, string>();
+        if (isMaster) {
+          const { data: tenantRows } = await supabase.from("tenants").select("id, name");
+          for (const t of tenantRows || []) tenantNames.set(t.id, t.name);
         }
 
-        // Admin local vê apenas usuários do MESMO TENANT
-        if (ctx.user.role === 'admin') {
-          const results = await db.select({
-            id: users.id,
-            username: users.username,
-            name: users.name,
-            role: users.role,
-            createdAt: users.createdAt
-          }).from(users)
-            .where(eq(users.tenantId, ctx.user.tenantId || ""))
-            .orderBy(users.name);
-          
-          return results;
-        }
-
-        throw new TRPCError({ code: 'FORBIDDEN', message: 'Acesso negado' });
+        return (data || [])
+          .filter((u: any) => isMaster || u.role !== 'master_admin')
+          .map((u: any) => ({
+            id: u.id as number,
+            username: u.username as string,
+            name: (u.name ?? null) as string | null,
+            role: u.role as 'user' | 'admin' | 'master_admin',
+            tenantId: (u.tenant_id ?? null) as string | null,
+            tenantName: (u.tenant_id ? tenantNames.get(u.tenant_id) ?? null : null) as string | null,
+            createdAt: (u.created_at ?? null) as string | null,
+          }));
       }),
       create: protectedProcedure
         .input(z.object({
-          username: z.string().min(3),
-          password: z.string().min(6),
-          name: z.string().optional(),
+          username: z.string().trim().toLowerCase().min(3).max(255),
+          password: userPasswordSchema,
+          name: z.string().trim().max(255).optional(),
+          // O papel de super administrador nunca é concedido por esta rota.
           role: z.enum(['user', 'admin']).default('user'),
+          // Só o super administrador escolhe a empresa; o administrador cria na própria.
+          tenantId: z.string().min(1).max(64).optional(),
         }))
         .mutation(async ({ ctx, input }) => {
-          if (ctx.user.role !== 'admin' && ctx.user.role !== 'master_admin') {
+          if (!isTenantAdmin(ctx.user)) {
             throw new TRPCError({ code: 'FORBIDDEN', message: 'Acesso negado' });
           }
-          if (!ctx.user.tenantId) {
-            throw new TRPCError({ code: 'BAD_REQUEST', message: 'Crie ou selecione um ambiente antes de cadastrar usuários' });
+          const isMaster = ctx.user.role === 'master_admin';
+          if (!isMaster && input.tenantId && input.tenantId !== ctx.user.tenantId) {
+            throw new TRPCError({ code: 'FORBIDDEN', message: 'Você só pode cadastrar usuários na sua própria empresa' });
+          }
+          const targetTenantId = isMaster ? input.tenantId : ctx.user.tenantId;
+          if (!targetTenantId) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: isMaster ? 'Escolha a empresa do novo usuário.' : 'Sua conta não está vinculada a uma empresa.',
+            });
+          }
+          const { data: tenantRow } = await supabase.from("tenants").select("id, name").eq("id", targetTenantId).maybeSingle();
+          if (!tenantRow) {
+            throw new TRPCError({ code: 'BAD_REQUEST', message: 'Empresa não encontrada.' });
+          }
+
+          assertPasswordNotObvious(input.password, input.username);
+
+          const { data: existing } = await supabase.from("users").select("id").eq("username", input.username).maybeSingle();
+          if (existing) {
+            throw new TRPCError({ code: 'CONFLICT', message: 'Já existe um usuário com esse login.' });
           }
 
           const hashedPassword = await bcrypt.hash(input.password, 10);
           const email = input.username.includes('@') ? input.username : `${input.username}@projeto-maju.com`;
 
-          // Criar no Supabase Auth também
+          // Nada de papel/empresa em user_metadata: a autorização vem só da tabela users.
           const { data: authUser, error: authError } = await supabase.auth.admin.createUser({
             email,
             password: input.password,
             email_confirm: true,
-            user_metadata: { name: input.name, role: input.role }
+            user_metadata: { name: input.name || input.username },
           });
 
-          if (authError) {
-            console.error("[Admin] Supabase Auth user creation failed:", authError.message);
-            throw new TRPCError({ code: 'BAD_REQUEST', message: `Erro no Auth: ${authError.message}` });
+          if (authError || !authUser?.user) {
+            console.error("[Admin] Supabase Auth user creation failed:", authError?.message);
+            throw new TRPCError({ code: 'BAD_REQUEST', message: `Erro no Auth: ${authError?.message || 'falha ao criar a conta'}` });
           }
 
           const { data, error } = await supabase.from("users").insert({
-            auth_id: authUser.user.id, // Salva o UUID correto do Auth
+            auth_id: authUser.user.id,
             username: input.username,
             password: hashedPassword,
-            name: input.name,
+            name: input.name || input.username,
             role: input.role,
-            tenant_id: ctx.user.tenantId, // Vincular ao mesmo ambiente do criador
+            tenant_id: targetTenantId,
             last_signed_in: new Date().toISOString()
           }).select("id").single();
 
-          if (error) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: error.message });
-
-          // IMPORTANTE: Também vincular na tabela user_tenants para isolamento RLS
-          if (ctx.user.tenantId) {
-            await supabase.from("user_tenants").insert({
-              user_id: data.id,
-              tenant_id: ctx.user.tenantId,
-              role: input.role === 'admin' ? 'admin' : 'member'
-            });
+          if (error || !data) {
+            // Não deixa uma conta de login órfã, sem usuário no app.
+            await supabase.auth.admin.deleteUser(authUser.user.id).catch(() => undefined);
+            throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: error?.message || 'Falha ao gravar o usuário' });
           }
+
+          await supabase.from("user_tenants").insert({
+            user_id: data.id,
+            tenant_id: targetTenantId,
+            role: input.role === 'admin' ? 'admin' : 'member'
+          });
+
+          await createAuditLog({
+            userId: ctx.user.id,
+            tenantId: targetTenantId,
+            action: 'create',
+            entityType: 'user',
+            entityId: data.id,
+            entityName: input.username,
+            details: `Usuário criado: ${input.username} — papel ${input.role}, empresa ${tenantRow.name}`
+          });
 
           return { id: data.id };
         }),
       update: guardedProcedure({ id: "user" })
         .input(z.object({
           id: z.number(),
-          name: z.string().optional(),
+          name: z.string().trim().max(255).optional(),
           role: z.enum(['user', 'admin']).optional(),
-          password: z.string().min(6).optional(),
+          password: userPasswordSchema.optional(),
         }))
         .mutation(async ({ ctx, input }) => {
           const isSelf = ctx.user.id === input.id;
@@ -3354,7 +3417,7 @@ export const appRouter = router({
           // tenant nunca altera um master_admin.
           const { data: target } = await supabase
             .from("users")
-            .select("id, role")
+            .select("id, role, username, tenant_id, auth_id")
             .eq("id", input.id)
             .maybeSingle();
           if (!target) throw new TRPCError({ code: 'NOT_FOUND', message: 'Usuário não encontrado' });
@@ -3363,26 +3426,48 @@ export const appRouter = router({
           }
 
           const updateData: any = {};
-          if (input.name) updateData.name = input.name;
-          // Ninguém altera o próprio papel; só admins alteram o de terceiros.
-          if (input.role && isTenantAdmin(ctx.user) && !isSelf && target.role !== 'master_admin') {
-            updateData.role = input.role;
+          const changes: string[] = [];
+          if (input.name) {
+            updateData.name = input.name;
+            changes.push("nome");
           }
-          if (input.password) updateData.password = await bcrypt.hash(input.password, 10);
+          // Ninguém altera o próprio papel; só admins alteram o de terceiros.
+          if (input.role && input.role !== target.role && isTenantAdmin(ctx.user) && !isSelf && target.role !== 'master_admin') {
+            updateData.role = input.role;
+            changes.push(`papel ${target.role} → ${input.role}`);
+          }
+          if (input.password) {
+            assertPasswordNotObvious(input.password, target.username || "");
+            // A senha de login fica no Supabase Auth: troca lá também.
+            if (target.auth_id) {
+              const { error: authError } = await supabase.auth.admin.updateUserById(target.auth_id, { password: input.password });
+              if (authError) {
+                throw new TRPCError({ code: 'BAD_REQUEST', message: `Erro ao trocar a senha: ${authError.message}` });
+              }
+            }
+            updateData.password = await bcrypt.hash(input.password, 10);
+            changes.push("senha");
+          }
 
           if (Object.keys(updateData).length === 0) return { success: true };
 
           const { error } = await supabase.from("users").update(updateData).eq("id", input.id);
           if (error) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: error.message });
 
+          if (updateData.role) {
+            await supabase.from("user_tenants")
+              .update({ role: updateData.role === 'admin' ? 'admin' : 'member' })
+              .eq("user_id", input.id);
+          }
+
           await createAuditLog({
             userId: ctx.user.id,
-            tenantId: ctx.tenantId,
+            tenantId: target.tenant_id ?? ctx.tenantId,
             action: 'update',
             entityType: 'user',
             entityId: input.id,
-            entityName: input.name || `Usuário ${input.id}`,
-            details: `Usuário atualizado: ${Object.keys(updateData).join(", ")}`
+            entityName: target.username || input.name || `Usuário ${input.id}`,
+            details: `Usuário atualizado: ${changes.join(", ")}`
           });
           return { success: true };
         }),
@@ -3398,7 +3483,7 @@ export const appRouter = router({
 
           const { data: target } = await supabase
             .from("users")
-            .select("id, role, username")
+            .select("id, role, username, tenant_id, auth_id")
             .eq("id", input.id)
             .maybeSingle();
           if (!target) throw new TRPCError({ code: 'NOT_FOUND', message: 'Usuário não encontrado' });
@@ -3408,7 +3493,7 @@ export const appRouter = router({
 
           await createAuditLog({
             userId: ctx.user.id,
-            tenantId: ctx.tenantId,
+            tenantId: target.tenant_id ?? ctx.tenantId,
             action: 'delete',
             entityType: 'user',
             entityId: input.id,
@@ -3416,8 +3501,15 @@ export const appRouter = router({
             details: `Usuário removido: ${target.username || input.id}`
           });
 
+          await supabase.from("user_tenants").delete().eq("user_id", input.id);
           const { error } = await supabase.from("users").delete().eq("id", input.id);
           if (error) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: error.message });
+
+          // Encerra também a conta de login, para o acesso não sobreviver à remoção.
+          if (target.auth_id) {
+            const { error: authError } = await supabase.auth.admin.deleteUser(target.auth_id);
+            if (authError) console.error("[Admin] Falha ao remover a conta de login:", authError.message);
+          }
           return { success: true };
         }),
     }),
@@ -3429,6 +3521,7 @@ export const appRouter = router({
           if (!board || (board.ownerId !== ctx.user.id && !isTenantAdmin(ctx.user))) {
             throw new TRPCError({ code: 'FORBIDDEN', message: 'Apenas o dono ou admin pode adicionar membros' });
           }
+          await assertSameTenantMember(input.boardId, input.userId);
 
           const { error } = await supabase.from("board_members").upsert({
             board_id: input.boardId,
