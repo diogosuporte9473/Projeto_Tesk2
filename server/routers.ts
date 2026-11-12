@@ -3,7 +3,7 @@ import { and } from "drizzle-orm";
 import { getSessionCookieOptions } from "./_core/cookies.js";
 import { systemRouter } from "./_core/systemRouter.js";
 import { publicProcedure, router, protectedProcedure } from "./_core/trpc.js";
-import { guardedProcedure, assertAccess, isTenantAdmin } from "./_core/access.js";
+import { guardedProcedure, assertAccess, isTenantAdmin, tenantOf } from "./_core/access.js";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
@@ -709,11 +709,30 @@ export const appRouter = router({
           description: z.string().optional(),
           color: z.string().default("#4b4897"),
           theme: z.enum(BOARD_THEME_KEYS).default(DEFAULT_THEME),
+          // Só o master_admin escolhe a empresa; os demais criam na própria.
+          tenantId: z.string().min(1).max(64).optional(),
         })
       )
       .mutation(async ({ ctx, input }) => {
         const theme = getBoardTheme(input.theme);
         const themed = theme.key !== DEFAULT_THEME;
+
+        const isMaster = ctx.user.role === "master_admin";
+        if (input.tenantId && !isMaster && input.tenantId !== ctx.user.tenantId) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Você só pode criar quadros na sua própria empresa" });
+        }
+        const boardTenantId = (isMaster && input.tenantId) || ctx.user.tenantId;
+        const { data: tenantRow } = boardTenantId
+          ? await supabase.from("tenants").select("*").eq("id", boardTenantId).maybeSingle()
+          : { data: null as any };
+        if (!tenantRow) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: isMaster
+              ? "Escolha a empresa em que o quadro será criado."
+              : "Sua conta não está vinculada a uma empresa válida. Fale com o administrador.",
+          });
+        }
         // MÉTODO DIRETO REST: Evita o erro de conexão do Drizzle/Postgres
         const { data: board, error: boardError } = await supabase
           .from("boards")
@@ -722,7 +741,7 @@ export const appRouter = router({
             description: input.description || "",
             color: input.color,
             owner_id: ctx.user.id,
-            tenant_id: ctx.user.tenantId, // Vincular ao tenant do usuário
+            tenant_id: boardTenantId, // empresa do quadro (validada acima)
             // Só envia a coluna quando há tema: quadros "Geral" seguem
             // funcionando mesmo antes da migração 0010.
             ...(themed ? { theme: theme.key } : {}),
@@ -741,7 +760,7 @@ export const appRouter = router({
         // Registrar log
         await createAuditLog({
           userId: ctx.user.id,
-          tenantId: ctx.tenantId,
+          tenantId: boardTenantId,
           action: 'create',
           entityType: 'board',
           entityId: board.id,
@@ -755,7 +774,7 @@ export const appRouter = router({
           .from("lists")
           .insert(initialLists.map((name, position) => ({
             board_id: board.id,
-            tenant_id: ctx.tenantId,
+            tenant_id: boardTenantId,
             name,
             position,
           })));
@@ -857,7 +876,7 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ ctx, input }) => {
-        const board = await getBoardById(input.id, ctx.user.id);
+        const board = await getBoardById(input.id, ctx.user.id, ctx.tenantId || undefined, ctx.user.role);
         if (!board) throw new TRPCError({ code: "NOT_FOUND", message: "Board not found" });
 
         // Permitir que qualquer usuário altere o nome (removido check de owner)
@@ -887,11 +906,11 @@ export const appRouter = router({
     delete: guardedProcedure({ id: "board" })
       .input(z.object({ id: z.number() }))
       .mutation(async ({ ctx, input }) => {
-        const board = await getBoardById(input.id, ctx.user.id);
+        const board = await getBoardById(input.id, ctx.user.id, ctx.tenantId || undefined, ctx.user.role);
         if (!board) throw new TRPCError({ code: "NOT_FOUND", message: "Board not found" });
 
         // Apenas ADM pode excluir boards
-        if (ctx.user.role !== 'admin') {
+        if (!isTenantAdmin(ctx.user)) {
           throw new TRPCError({ code: "FORBIDDEN", message: "Apenas administradores podem excluir quadros" });
         }
 
@@ -921,10 +940,10 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ ctx, input }) => {
-        const board = await getBoardById(input.boardId, ctx.user.id);
+        const board = await getBoardById(input.boardId, ctx.user.id, ctx.tenantId || undefined, ctx.user.role);
         if (!board) throw new TRPCError({ code: "NOT_FOUND", message: "Board not found" });
 
-        if (board.ownerId !== ctx.user.id && ctx.user.role !== 'admin') {
+        if (board.ownerId !== ctx.user.id && !isTenantAdmin(ctx.user)) {
           throw new TRPCError({ code: "FORBIDDEN", message: "Only board owner or admin can add members" });
         }
 
@@ -978,8 +997,8 @@ export const appRouter = router({
         })
       }))
       .mutation(async ({ ctx, input }) => {
-        const board = await getBoardById(input.boardId, ctx.user.id);
-        if (!board || ctx.user.role !== 'admin') {
+        const board = await getBoardById(input.boardId, ctx.user.id, ctx.tenantId || undefined, ctx.user.role);
+        if (!board || !isTenantAdmin(ctx.user)) {
           throw new TRPCError({ code: "FORBIDDEN", message: "Apenas administradores podem configurar espelhamento" });
         }
 
@@ -1112,7 +1131,7 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ ctx, input }) => {
-        const board = await getBoardById(input.boardId, ctx.user.id, ctx.tenantId || undefined);
+        const board = await getBoardById(input.boardId, ctx.user.id, ctx.tenantId || undefined, ctx.user.role);
         if (!board) {
           throw new TRPCError({
             code: "NOT_FOUND",
@@ -1128,7 +1147,7 @@ export const appRouter = router({
           .from("lists")
           .insert({
             board_id: input.boardId,
-            tenant_id: ctx.tenantId,
+            tenant_id: await tenantOf("board", input.boardId),
             name: input.name,
             position,
           })
@@ -1203,7 +1222,7 @@ export const appRouter = router({
             .from("cards")
             .insert({
               list_id: input.listId,
-              tenant_id: ctx.tenantId,
+              tenant_id: await tenantOf("list", input.listId),
               title: input.title,
               description: input.description || "",
               position,
@@ -1883,7 +1902,7 @@ export const appRouter = router({
             title: `${original.title} (Cópia)`,
             description: original.description,
             list_id: input.listId || original.list_id,
-            tenant_id: ctx.tenantId, // Vincular ao tenant do usuário
+            tenant_id: await tenantOf("list", input.listId || original.list_id),
             position: original.position + 1,
             start_date: original.start_date,
             due_date: original.due_date,
@@ -2049,7 +2068,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const insertData: any = {
           card_id: input.cardId,
-          tenant_id: ctx.tenantId, // Vincular ao tenant do usuário
+          tenant_id: await tenantOf("card", input.cardId),
           filename: input.filename,
           file_url: input.fileUrl,
           mime_type: input.mimeType,
@@ -2082,7 +2101,7 @@ export const appRouter = router({
             for (const cardId of relatedCardIds) {
               await supabase.from("card_attachments").insert({
                 card_id: cardId,
-                tenant_id: ctx.tenantId, // Vincular ao tenant do usuário
+                tenant_id: await tenantOf("card", cardId),
                 filename: input.filename,
                 file_url: input.fileUrl,
                 file_key: input.fileKey,
@@ -2943,7 +2962,7 @@ export const appRouter = router({
           .from("card_comments")
           .insert({
             card_id: input.cardId,
-            tenant_id: ctx.tenantId, // Vincular ao tenant do usuário
+            tenant_id: await tenantOf("card", input.cardId),
             user_id: ctx.user.id,
             content: input.content,
           })
@@ -2966,7 +2985,7 @@ export const appRouter = router({
             for (const cardId of relatedCardIds) {
               await supabase.from("card_comments").insert({
                 card_id: cardId,
-                tenant_id: ctx.tenantId, // Vincular ao tenant do usuário
+                tenant_id: await tenantOf("card", cardId),
                 user_id: ctx.user.id,
                 content: input.content,
               });
@@ -3070,7 +3089,7 @@ export const appRouter = router({
             start_date: mirrorSettings.mirror_dates ? originalCard.start_date : null,
             due_date: mirrorSettings.mirror_dates ? originalCard.due_date : null,
             list_id: input.targetListId,
-            tenant_id: ctx.tenantId, // Vincular ao tenant do usuário
+            tenant_id: await tenantOf("list", input.targetListId),
             position: 0,
             created_by: ctx.user.id
           })

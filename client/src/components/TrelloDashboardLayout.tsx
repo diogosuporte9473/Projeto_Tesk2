@@ -92,6 +92,9 @@ export default function TrelloDashboardLayout({ children }: TrelloDashboardLayou
   const utils = trpc.useUtils();
   const { data: boards, isLoading } = trpc.boards.list.useQuery();
   const createBoardMutation = trpc.boards.create.useMutation();
+  // O super administrador atua em várias empresas: escolhe em qual criar o quadro.
+  const { data: allTenants } = trpc.branding.listAllTenants.useQuery(undefined, { enabled: user?.role === "master_admin", retry: false } as any);
+  const [newBoardTenant, setNewBoardTenant] = useState("");
 
   const [collapsed, setCollapsed] = useState(() => {
     try {
@@ -141,12 +144,17 @@ export default function TrelloDashboardLayout({ children }: TrelloDashboardLayou
   const handleCreateBoard = async () => {
     const name = newBoardName.trim();
     if (!name || createBoardMutation.isPending) return;
+    if (user?.role === "master_admin" && !newBoardTenant) {
+      toast.error(en ? "Choose the company for this board" : "Escolha a empresa em que o quadro será criado");
+      return;
+    }
     try {
       const created: any = await createBoardMutation.mutateAsync({
         name,
         description: "",
         color: newBoardColor,
         theme: newBoardTheme,
+        ...(user?.role === "master_admin" && newBoardTenant ? { tenantId: newBoardTenant } : {}),
       });
       await utils.boards.list.invalidate();
       setNewBoardName("");
@@ -526,6 +534,26 @@ export default function TrelloDashboardLayout({ children }: TrelloDashboardLayou
                 </button>
               ))}
             </div>
+            {user?.role === "master_admin" && (
+              <div>
+                <label htmlFor="new-board-tenant" className="mb-1.5 block text-xs font-semibold text-muted-foreground">
+                  {en ? "Company" : "Empresa"}
+                </label>
+                <select
+                  id="new-board-tenant"
+                  value={newBoardTenant}
+                  onChange={(e) => setNewBoardTenant(e.target.value)}
+                  className="h-10 w-full rounded-lg border border-input bg-transparent px-3 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
+                >
+                  <option value="">{en ? "Choose…" : "Escolha…"}</option>
+                  {((allTenants as any[]) || []).map((tenant) => (
+                    <option key={tenant.id} value={tenant.id}>
+                      {tenant.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div>
               <p className="mb-1.5 text-xs font-semibold text-muted-foreground">{en ? "Theme" : "Tema"}</p>
               <div className="flex flex-wrap gap-1.5">
@@ -564,7 +592,7 @@ export default function TrelloDashboardLayout({ children }: TrelloDashboardLayou
             <Button variant="ghost" onClick={() => setShowNewBoard(false)}>
               {t("common.cancel")}
             </Button>
-            <Button onClick={handleCreateBoard} disabled={!newBoardName.trim() || createBoardMutation.isPending}>
+            <Button onClick={handleCreateBoard} disabled={!newBoardName.trim() || createBoardMutation.isPending || (user?.role === "master_admin" && !newBoardTenant)}>
               {t("common.create")}
             </Button>
           </DialogFooter>

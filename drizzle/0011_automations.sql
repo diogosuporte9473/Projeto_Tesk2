@@ -43,6 +43,21 @@ CREATE TABLE IF NOT EXISTS public.automation_runs (
 CREATE INDEX IF NOT EXISTS automation_runs_automation_idx ON public.automation_runs (automation_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS automation_runs_board_idx ON public.automation_runs (board_id, created_at DESC);
 
+-- Bancos antigos podem ter uma "notifications" de outro formato (sem user_id),
+-- que o app nunca usou. Ela é preservada com outro nome, sem apagar dados.
+DO $$
+BEGIN
+  IF to_regclass('public.notifications') IS NOT NULL
+     AND NOT EXISTS (
+       SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'notifications' AND column_name = 'user_id'
+     ) THEN
+    ALTER TABLE public.notifications RENAME TO notifications_legacy;
+    ALTER INDEX IF EXISTS public.notifications_pkey RENAME TO notifications_legacy_pkey;
+    ALTER SEQUENCE IF EXISTS public.notifications_id_seq RENAME TO notifications_legacy_id_seq;
+  END IF;
+END $$;
+
 CREATE TABLE IF NOT EXISTS public.notifications (
   id               serial PRIMARY KEY,
   user_id          integer NOT NULL,
