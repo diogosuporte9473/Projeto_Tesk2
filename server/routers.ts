@@ -49,6 +49,7 @@ import { invokeLLM, Message } from "./_core/llm.js";
 import { ENV } from "./_core/env.js";
 
 import { supabase, createAuthClient } from "./_core/supabase.js";
+import { BOARD_THEME_KEYS, BOARD_SETTING_LIST_KEYS, DEFAULT_THEME, getBoardTheme, normalizeSettingList } from "../shared/boardThemes.js";
 
 /**
  * Função utilitária para registrar logs de auditoria
@@ -448,9 +449,12 @@ export const appRouter = router({
           name: z.string().min(1).max(255),
           description: z.string().optional(),
           color: z.string().default("#4b4897"),
+          theme: z.enum(BOARD_THEME_KEYS).default(DEFAULT_THEME),
         })
       )
       .mutation(async ({ ctx, input }) => {
+        const theme = getBoardTheme(input.theme);
+        const themed = theme.key !== DEFAULT_THEME;
         // MÉTODO DIRETO REST: Evita o erro de conexão do Drizzle/Postgres
         const { data: board, error: boardError } = await supabase
           .from("boards")
@@ -460,6 +464,9 @@ export const appRouter = router({
             color: input.color,
             owner_id: ctx.user.id,
             tenant_id: ctx.user.tenantId, // Vincular ao tenant do usuário
+            // Só envia a coluna quando há tema: quadros "Geral" seguem
+            // funcionando mesmo antes da migração 0010.
+            ...(themed ? { theme: theme.key } : {}),
           })
           .select("id")
           .single();
@@ -483,15 +490,16 @@ export const appRouter = router({
           details: `Quadro criado: ${input.name}`
         });
 
-        // Criar lista "Caixa de Entrada" automaticamente
+        // Listas iniciais: o fluxo sugerido pelo tema ou a "Caixa de Entrada".
+        const initialLists = themed ? theme.lists : ["Caixa de Entrada"];
         const { error: listError } = await supabase
           .from("lists")
-          .insert({
+          .insert(initialLists.map((name, position) => ({
             board_id: board.id,
             tenant_id: ctx.tenantId,
-            name: "Caixa de Entrada",
-            position: 0,
-          });
+            name,
+            position,
+          })));
 
         if (listError) {
           console.error("[Database] Inbox list creation failed:", listError);
@@ -500,6 +508,85 @@ export const appRouter = router({
         }
 
         return { id: board.id };
+      }),
+    // Fase 1 — tema (segmento) por quadro. Nunca altera nem remove cartões:
+    // grava a chave do tema, os ajustes do quadro e, se pedido, acrescenta as
+    // listas do fluxo sugerido que ainda não existem.
+    setTheme: guardedProcedure({ id: "board" })
+      .input(
+        z.object({
+          id: z.number(),
+          theme: z.enum(BOARD_THEME_KEYS),
+          createSuggestedLists: z.boolean().default(false),
+          settings: z.object(Object.fromEntries(BOARD_SETTING_LIST_KEYS.map((key) => [key, z.array(z.string().max(60)).max(30).optional()]))).strict().optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const board: any = await getBoardById(input.id, ctx.user.id, ctx.tenantId || undefined, ctx.user.role, true);
+        if (!board) throw new TRPCError({ code: "NOT_FOUND", message: "Quadro não encontrado" });
+
+        const isOwner = (board.ownerId ?? board.owner_id) === ctx.user.id;
+        if (!isOwner && !isTenantAdmin(ctx.user)) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Apenas o dono do quadro ou um administrador pode alterar o tema" });
+        }
+
+        const theme = getBoardTheme(input.theme);
+
+        // Mantém ajustes de outros temas (o usuário pode voltar a eles depois).
+        const settings: Record<string, string[]> = { ...((board.settings as Record<string, string[]>) || {}) };
+        for (const [key, values] of Object.entries(input.settings || {})) {
+          if (values === undefined) continue;
+          settings[key] = normalizeSettingList(values);
+        }
+
+        const { error } = await supabase
+          .from("boards")
+          .update({ theme: theme.key, settings, updated_at: new Date().toISOString() })
+          .eq("id", input.id);
+        if (error) {
+          console.error("[Database] setTheme failed:", error);
+          const missingColumn = /theme|settings|column|schema cache/i.test(error.message || "");
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: missingColumn
+              ? "O banco ainda não tem as colunas de tema. Execute a migração drizzle/0010_board_theme.sql."
+              : error.message,
+          });
+        }
+
+        let createdLists: string[] = [];
+        if (input.createSuggestedLists) {
+          const existing = await getBoardLists(input.id);
+          const names = new Set(existing.map((l: any) => String(l.name).trim().toLowerCase()));
+          createdLists = theme.lists.filter((name) => !names.has(name.toLowerCase()));
+          if (createdLists.length > 0) {
+            const start = existing.reduce((max: number, l: any) => Math.max(max, Number(l.position) || 0), -1) + 1;
+            const { error: listError } = await supabase.from("lists").insert(
+              createdLists.map((name, index) => ({
+                board_id: input.id,
+                tenant_id: board.tenantId ?? board.tenant_id,
+                name,
+                position: start + index,
+              }))
+            );
+            if (listError) {
+              console.error("[Database] setTheme list creation failed:", listError);
+              createdLists = [];
+            }
+          }
+        }
+
+        await createAuditLog({
+          userId: ctx.user.id,
+          tenantId: ctx.tenantId,
+          action: "update",
+          entityType: "board",
+          entityId: input.id,
+          entityName: board.name,
+          details: `Tema do quadro alterado para ${theme.name}` + (createdLists.length ? `; listas criadas: ${createdLists.join(", ")}` : ""),
+        });
+
+        return { success: true, theme: theme.key, settings, createdLists };
       }),
     update: guardedProcedure({ id: "board" })
       .input(

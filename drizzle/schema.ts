@@ -1,4 +1,4 @@
-import { pgTable, serial, text, timestamp, varchar, pgEnum, integer, boolean, uniqueIndex, bigint, uuid } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, varchar, pgEnum, integer, boolean, uniqueIndex, bigint, uuid, jsonb } from "drizzle-orm/pg-core";
 
 /**
  * Enums para PostgreSQL
@@ -68,6 +68,9 @@ export const boards = pgTable("boards", {
   name: text("name").notNull(),
   description: text("description"),
   color: text("color").default("#4b4897").notNull(),
+  // Segmento do quadro (shared/boardThemes.ts) e ajustes próprios dele.
+  theme: text("theme").default("general").notNull(),
+  settings: jsonb("settings").$type<Record<string, string[]>>().default({}).notNull(),
   ownerId: integer("owner_id").references(() => users.id).notNull(),
   tenantId: uuid("tenant_id").references(() => tenants.id).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
