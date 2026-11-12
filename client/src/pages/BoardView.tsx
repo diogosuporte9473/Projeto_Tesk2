@@ -53,6 +53,7 @@ import {
 
 interface CardWithUser extends DBCard {
   labels?: { id: number; label: string; color: string }[];
+  fields?: Record<string, string>;
   assignedToName?: string | null;
   checklistCount?: number;
   completedChecklistCount?: number;
@@ -446,6 +447,7 @@ export default function BoardView() {
                   query={cardQuery}
                   filter={cardFilter}
                   currentUserName={user?.name || ""}
+                  highlightField={boardTheme.cardHighlight}
                 />
               ))}
 
@@ -964,6 +966,7 @@ function ListColumn({
   query,
   filter,
   currentUserName,
+  highlightField,
 }: {
   listId: number;
   listName: string;
@@ -971,6 +974,7 @@ function ListColumn({
   query: string;
   filter: CardFilter;
   currentUserName: string;
+  highlightField?: string;
 }) {
   const { data: cards, isLoading } = trpc.cards.getByList.useQuery({ listId });
   const utils = trpc.useUtils();
@@ -994,7 +998,7 @@ function ListColumn({
     const now = new Date();
     return allCards.filter((card) => {
       if (text) {
-        const haystack = `${card.title} ${card.description || ""} ${(card.labels || []).map((l) => l.label).join(" ")} ${card.assignedToName || ""}`.toLowerCase();
+        const haystack = `${card.title} ${card.description || ""} ${(card.labels || []).map((l) => l.label).join(" ")} ${card.assignedToName || ""} ${Object.values(card.fields || {}).join(" ")}`.toLowerCase();
         if (!haystack.includes(text)) return false;
       }
       if (filter === "mine") return !!currentUserName && card.assignedToName === currentUserName;
@@ -1184,6 +1188,7 @@ function ListColumn({
                       checklistCount={card.checklistCount}
                       completedChecklistCount={card.completedChecklistCount}
                       attachmentCount={card.attachmentCount}
+                      highlight={highlightField ? { label: highlightField, value: card.fields?.[highlightField] || "" } : null}
                     />
                   </div>
                 );

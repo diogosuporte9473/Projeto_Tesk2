@@ -279,3 +279,39 @@ describe("boards.setTheme (tema por quadro)", () => {
     await expect(callerFor(1).boards.setTheme({ id: 10, theme: "financeiro" as any })).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
 });
+
+describe("cardDetails.upsertCustomField (campos do tema)", () => {
+  beforeEach(() => {
+    const board = tables.boards.find((b) => b.id === 10);
+    board.theme = "siem";
+    board.settings = { detectionTools: ["EDR", "Firewall X"] };
+  });
+
+  it("valida número, data e opção de seleção dos campos do tema", async () => {
+    const save = (fieldName: string, fieldValue: string) =>
+      callerFor(1).cardDetails.upsertCustomField({ cardId: 1000, fieldName, fieldValue });
+
+    await expect(save("Severidade", "Gravíssima")).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(save("Ferramenta de detecção", "Outra")).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(save("Data de resolução", "amanhã")).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(tables.card_custom_fields || []).toHaveLength(0);
+
+    await save("Severidade", "Crítica");
+    await save("Ferramenta de detecção", "Firewall X"); // nome editado pelo usuário no quadro
+    await save("Data de resolução", "2026-11-20");
+    await save("Hostname", "FIN-022");
+    expect(tables.card_custom_fields.map((f: any) => f.field_value)).toEqual(["Crítica", "Firewall X", "2026-11-20", "FIN-022"]);
+  });
+
+  it("aceita limpar o campo e não restringe campos fora do tema", async () => {
+    await callerFor(1).cardDetails.upsertCustomField({ cardId: 1000, fieldName: "Severidade", fieldValue: "" });
+    await callerFor(1).cardDetails.upsertCustomField({ cardId: 1000, fieldName: "Mapa de Calor", fieldValue: "Qualquer" });
+    expect(tables.card_custom_fields).toHaveLength(2);
+  });
+
+  it("não grava campo em cartão de outro tenant", async () => {
+    await expect(
+      callerFor(1).cardDetails.upsertCustomField({ cardId: 2000, fieldName: "Severidade", fieldValue: "Alta" })
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+});

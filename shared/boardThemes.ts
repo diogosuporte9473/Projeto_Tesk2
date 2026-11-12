@@ -10,7 +10,7 @@
  * categorias e indicadores que as telas passam a oferecer.
  */
 
-export type ThemeFieldType = "text" | "select" | "date" | "number";
+export type ThemeFieldType = "text" | "select" | "date" | "datetime" | "number";
 
 export interface ThemeField {
   /** Nome gravado em card_custom_fields.field_name (estável: não renomear). */
@@ -45,6 +45,8 @@ export interface BoardTheme {
   /** Classificações próprias do segmento (severidade, tipo de tarefa...). */
   classifications: { label: string; options: string[] }[];
   fields: ThemeField[];
+  /** Campo mostrado como selo no cartão do quadro (ex.: Severidade). */
+  cardHighlight?: string;
   /** Indicadores previstos para o painel do segmento (Fase 3). */
   indicators: string[];
   /** Automações previstas (Fase 4). */
@@ -103,6 +105,7 @@ export const BOARD_THEMES: Record<BoardThemeKey, BoardTheme> = {
       { key: "Cliente relacionado", label: "Cliente relacionado", type: "text" },
       { key: "Link externo", label: "Link externo", type: "text" },
     ],
+    cardHighlight: "Categoria",
     indicators: [
       "Pedidos pendentes", "Atividades de estoque", "Problemas de integração", "Devoluções em andamento",
       "Pendências logísticas", "Campanhas em execução", "Tarefas atrasadas", "Tempo médio de resolução",
@@ -145,6 +148,7 @@ export const BOARD_THEMES: Record<BoardThemeKey, BoardTheme> = {
       { key: "Previsão de fechamento", label: "Previsão de fechamento", type: "date" },
       { key: "Motivo de perda", label: "Motivo de perda", type: "text" },
     ],
+    cardHighlight: "Valor da oportunidade",
     indicators: [
       "Leads recebidos", "Leads qualificados", "Oportunidades abertas", "Taxa de conversão", "Valor do pipeline",
       "Vendas ganhas", "Vendas perdidas", "Tempo médio de negociação", "Follow-ups pendentes",
@@ -190,13 +194,14 @@ export const BOARD_THEMES: Record<BoardThemeKey, BoardTheme> = {
       { key: "IP de origem", label: "Endereço IP de origem", type: "text" },
       { key: "IP de destino", label: "Endereço IP de destino", type: "text" },
       { key: "Usuário relacionado", label: "Usuário relacionado", type: "text" },
-      { key: "Data da detecção", label: "Data e horário da detecção", type: "date" },
+      { key: "Data da detecção", label: "Data e horário da detecção", type: "datetime" },
       { key: "Severidade", label: "Severidade", type: "select", options: ["Crítica", "Alta", "Média", "Baixa", "Informativa"] },
       { key: "Tipo de ocorrência", label: "Tipo de ocorrência", type: "select" },
       { key: "IoCs", label: "Indicadores de comprometimento (IoCs)", type: "text" },
       { key: "Resultado", label: "Classificação do resultado", type: "select", options: ["Verdadeiro positivo", "Falso positivo", "Atividade informativa", "Incidente confirmado", "Incidente mitigado"] },
       { key: "Data de resolução", label: "Data de resolução", type: "date" },
     ],
+    cardHighlight: "Severidade",
     indicators: [
       "Incidentes por severidade", "Incidentes por ferramenta", "Incidentes por categoria", "Incidentes em investigação",
       "Incidentes resolvidos", "SLA cumprido", "SLA violado", "MTTA — tempo médio para reconhecimento",
@@ -243,6 +248,7 @@ export const BOARD_THEMES: Record<BoardThemeKey, BoardTheme> = {
       { key: "Ambiente", label: "Ambiente", type: "select", optionsFromSetting: "environments" },
       { key: "Data de entrega", label: "Data de entrega", type: "date" },
     ],
+    cardHighlight: "Tipo de atividade",
     indicators: [
       "Tarefas concluídas", "Bugs abertos", "Bugs críticos", "Velocidade da sprint", "Burndown",
       "Lead Time", "Cycle Time", "Entregas por versão", "Débito técnico", "Atividades atrasadas",
@@ -301,4 +307,36 @@ export function getFieldOptions(theme: BoardTheme, field: ThemeField, settings?:
   }
   if (field.options) return field.options;
   return field.type === "select" ? theme.categories : [];
+}
+
+/** Tom visual de um valor de classificação (severidade/prioridade). */
+export function valueTone(value: string): "critical" | "high" | "medium" | "low" | "neutral" {
+  const v = value.trim().toLowerCase();
+  if (["crítica", "critica", "crítico", "critico", "hotfix"].includes(v)) return "critical";
+  if (["alta", "alto", "bug"].includes(v)) return "high";
+  if (["média", "media", "médio", "medio"].includes(v)) return "medium";
+  if (["baixa", "baixo", "informativa"].includes(v)) return "low";
+  return "neutral";
+}
+
+/**
+ * Valida o valor de um campo do tema. Devolve a mensagem de erro ou null.
+ * Vazio sempre é aceito (limpar o campo). Em "select" o valor precisa estar
+ * entre as opções atuais do quadro.
+ */
+export function validateFieldValue(theme: BoardTheme, field: ThemeField, value: string, settings?: BoardSettings | null): string | null {
+  const v = value.trim();
+  if (!v) return null;
+  if (v.length > 2000) return `${field.label}: texto muito longo`;
+  if (field.type === "number") {
+    return Number.isFinite(Number(v.replace(",", "."))) ? null : `${field.label}: informe um número`;
+  }
+  if (field.type === "date" || field.type === "datetime") {
+    return Number.isNaN(Date.parse(v)) ? `${field.label}: data inválida` : null;
+  }
+  if (field.type === "select") {
+    const options = getFieldOptions(theme, field, settings);
+    return options.length === 0 || options.includes(v) ? null : `${field.label}: opção inválida`;
+  }
+  return null;
 }
