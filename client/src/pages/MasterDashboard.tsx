@@ -109,7 +109,7 @@ export default function MasterDashboard() {
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
                   <div 
-                    className="w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold"
+                    className="w-10 h-10 rounded-lg flex items-center justify-center text-foreground font-bold"
                     style={{ backgroundColor: t.primaryColor || '#00d9ff' }}
                   >
                     {t.name?.charAt(0)}

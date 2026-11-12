@@ -1,12 +1,10 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Card } from "@/components/ui/card";
 import { useState, useEffect } from "react";
-import { Clock, CalendarDays, AlignLeft, CheckSquare, Paperclip, User } from "lucide-react";
+import { Clock, CalendarDays, AlignLeft, CheckSquare, Paperclip } from "lucide-react";
 import { format, isBefore, isToday } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import CardDetailModal from "./CardDetailModal";
 
 interface Label {
@@ -31,6 +29,24 @@ interface DraggableCardProps {
   completedChecklistCount?: number;
   attachmentCount?: number;
   onChecklistChange?: (completed: number, total: number) => void;
+}
+
+const AVATAR_COLORS = ["#0ea5e9", "#8b5cf6", "#ec4899", "#f59e0b", "#10b981", "#ef4444", "#6366f1", "#14b8a6"];
+
+/** Cor estável por pessoa, para reconhecer o responsável de relance. */
+export function avatarColor(name: string) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+  return AVATAR_COLORS[hash % AVATAR_COLORS.length];
+}
+
+export function initialsOf(name: string) {
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("");
 }
 
 export function DraggableCard({
@@ -75,26 +91,25 @@ export function DraggableCard({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: `card-${id}-${listId}` });
+  } = useSortable({ id: `card-${id}-${listId}`, data: { title } });
 
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.5 : 1,
+    opacity: isDragging ? 0.35 : 1,
     zIndex: isDragging ? 50 : 0,
   };
 
   const isOverdue = dueDate && isBefore(new Date(dueDate), new Date()) && !isToday(new Date(dueDate));
   const isDueToday = dueDate && isToday(new Date(dueDate));
+  const checklistDone = counts.total > 0 && counts.completed === counts.total;
+  const visibleLabels = labels.slice(0, 3);
+  const hasFooter = Boolean(startDate || dueDate || description || counts.total > 0 || attachmentCount > 0 || assignedToName);
 
   return (
     <>
-      <div
-        ref={setNodeRef}
-        style={style}
-        className="group relative"
-      >
-        <Card
+      <div ref={setNodeRef} style={style} className="group relative">
+        <div
           {...attributes}
           {...listeners}
           onClick={(e) => {
@@ -104,95 +119,107 @@ export function DraggableCard({
             }
           }}
           className={cn(
-            "p-3 bg-[var(--surface-2)] border-[var(--surface-border)] cursor-pointer hover:border-accent/40 hover:bg-[#232a4d] transition-all shadow-sm hover:shadow-lg rounded-xl flex flex-col gap-2.5",
-            isDragging && "ring-2 ring-accent shadow-2xl scale-[1.02]"
+            "task-card flex cursor-pointer flex-col gap-2 rounded-xl p-3 outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            isDragging && "ring-2 ring-primary"
           )}
         >
-          {/* Labels Section */}
+          {/* Etiquetas */}
           {labels.length > 0 && (
-            <div className="flex flex-wrap gap-1 mb-1.5">
-              {labels.map((label) => (
-                <div
+            <div className="flex flex-wrap gap-1">
+              {visibleLabels.map((label) => (
+                <span
                   key={label.id}
-                  className="h-1.5 w-6 rounded-full transition-all group-hover:h-2.5 group-hover:w-10 shadow-sm ring-1 ring-white/5"
-                  style={{ backgroundColor: label.color }}
+                  className="inline-flex max-w-[140px] items-center gap-1 rounded-md px-1.5 py-0.5 text-[10.5px] font-semibold leading-4"
+                  style={{
+                    backgroundColor: `color-mix(in srgb, ${label.color} 16%, transparent)`,
+                    color: `color-mix(in srgb, ${label.color} 72%, var(--foreground))`,
+                  }}
                   title={label.label}
-                />
+                >
+                  <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full" style={{ backgroundColor: label.color }} />
+                  <span className="truncate">{label.label}</span>
+                </span>
               ))}
+              {labels.length > visibleLabels.length && (
+                <span className="rounded-md bg-foreground/[0.07] px-1.5 py-0.5 text-[10.5px] font-semibold leading-4 text-muted-foreground">
+                  +{labels.length - visibleLabels.length}
+                </span>
+              )}
             </div>
           )}
 
-          {/* Title and Description */}
-          <div className="space-y-1">
-            <h3 className="font-bold text-[13px] text-gray-100 leading-snug group-hover:text-white transition-colors">
-              {title}
-            </h3>
-            {description && (
-              <p className="text-[11px] text-gray-500 line-clamp-2 leading-relaxed">
-                {description}
-              </p>
-            )}
-          </div>
+          {/* Título */}
+          <h3 className="text-[13.5px] font-medium leading-snug text-foreground">{title}</h3>
 
-          {/* Indicators and Footer */}
-          <div className="flex items-center justify-between mt-1 pt-1 border-t border-white/[0.03]">
-            <div className="flex items-center gap-3">
-              {/* Dates */}
-              {(startDate || dueDate) && (
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {startDate && (
-                    <div className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 text-[9px] font-black uppercase tracking-tight">
-                      <CalendarDays size={10} />
-                      <span>{format(new Date(startDate), "dd/MM", { locale: ptBR })}</span>
-                    </div>
-                  )}
-                  {dueDate && (
-                    <div className={cn(
-                      "flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-tight",
-                      isOverdue 
-                        ? "bg-red-500/10 text-red-400 border border-red-500/20" 
-                        : isDueToday 
-                          ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-                          : "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                    )}>
-                      <Clock size={10} className={cn(isOverdue && "animate-pulse")} />
-                      <span>{format(new Date(dueDate), "dd/MM", { locale: ptBR })}</span>
-                    </div>
-                  )}
-                </div>
-              )}
+          {/* Progresso do checklist */}
+          {counts.total > 0 && (
+            <div className="h-1 overflow-hidden rounded-full bg-foreground/[0.08]">
+              <div
+                className={cn("h-full rounded-full transition-all", checklistDone ? "bg-emerald-500" : "bg-primary")}
+                style={{ width: `${Math.round((counts.completed / counts.total) * 100)}%` }}
+              />
+            </div>
+          )}
 
-              {/* Status Icons */}
-              <div className="flex items-center gap-2 text-gray-500">
-                {description && <span title="Tem descrição"><AlignLeft size={11} /></span>}
+          {/* Rodapé: prazo, indicadores e responsável */}
+          {hasFooter && (
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px] font-medium text-muted-foreground">
+                {dueDate ? (
+                  <span
+                    className={cn(
+                      "inline-flex items-center gap-1 rounded-md px-1.5 py-0.5",
+                      isOverdue
+                        ? "bg-red-500/12 text-red-500 dark:text-red-400"
+                        : isDueToday
+                          ? "bg-amber-500/15 text-amber-600 dark:text-amber-400"
+                          : "bg-foreground/[0.06]"
+                    )}
+                    title={isOverdue ? "Atrasado" : isDueToday ? "Vence hoje" : "Entrega"}
+                  >
+                    <Clock size={11} />
+                    {format(new Date(dueDate), "d MMM", { locale: ptBR })}
+                  </span>
+                ) : startDate ? (
+                  <span className="inline-flex items-center gap-1" title="Início">
+                    <CalendarDays size={11} />
+                    {format(new Date(startDate), "d MMM", { locale: ptBR })}
+                  </span>
+                ) : null}
+                {description && (
+                  <span title="Tem descrição">
+                    <AlignLeft size={12} />
+                  </span>
+                )}
                 {counts.total > 0 && (
-                  <div className={cn(
-                    "flex items-center gap-0.5 text-[10px] font-bold",
-                    counts.completed === counts.total ? "text-green-500" : "text-gray-500"
-                  )} title="Checklist">
-                    <CheckSquare size={11} />
-                    <span>{counts.completed}/{counts.total}</span>
-                  </div>
+                  <span
+                    className={cn("inline-flex items-center gap-1", checklistDone && "text-emerald-600 dark:text-emerald-400")}
+                    title="Checklist"
+                  >
+                    <CheckSquare size={12} />
+                    {counts.completed}/{counts.total}
+                  </span>
                 )}
                 {attachmentCount > 0 && (
-                  <div className="flex items-center gap-0.5 text-[10px] font-bold" title="Anexos">
-                    <Paperclip size={11} />
-                    <span>{attachmentCount}</span>
-                  </div>
+                  <span className="inline-flex items-center gap-1" title="Anexos">
+                    <Paperclip size={12} />
+                    {attachmentCount}
+                  </span>
                 )}
               </div>
-            </div>
 
-            {/* Assignee Avatar */}
-            {assignedToName && (
-              <Avatar className="h-5 w-5 border border-[var(--surface-border)] shadow-sm ring-1 ring-white/5">
-                <AvatarFallback className="bg-[var(--surface-2)] text-[9px] font-black text-gray-400 uppercase">
-                  {assignedToName.charAt(0)}
-                </AvatarFallback>
-              </Avatar>
-            )}
-          </div>
-        </Card>
+              {assignedToName && (
+                <span
+                  className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white"
+                  style={{ backgroundColor: avatarColor(assignedToName) }}
+                  title={assignedToName}
+                >
+                  {initialsOf(assignedToName)}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {isModalOpen && (

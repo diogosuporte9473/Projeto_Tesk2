@@ -14,14 +14,14 @@ const BrandingContext = createContext<BrandingContextType | undefined>(undefined
 
 // Roxo do tema antigo: era o padrão gravado para todo tenant, então não conta
 // como personalização -- nesses casos vale a paleta DMS do index.css.
-const LEGACY_DEFAULT_COLOR = '#4b4897';
+const DEFAULT_COLORS = ['#4b4897', '#00d9ff']; // roxo antigo e ciano padrão: valem as cores do tema
 
 /** Aplica (ou remove) a cor de marca do tenant, com texto legível sobre ela. */
 function applyPrimaryColor(color: string | null | undefined) {
   const style = document.documentElement.style;
   const hex = (color || '').trim().toLowerCase();
   const match = /^#([0-9a-f]{6})$/.exec(hex);
-  if (!match || hex === LEGACY_DEFAULT_COLOR) {
+  if (!match || DEFAULT_COLORS.includes(hex)) {
     style.removeProperty('--primary');
     style.removeProperty('--primary-foreground');
     return;
