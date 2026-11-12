@@ -4,7 +4,7 @@ import { useRealtimeSync } from "@/_core/hooks/useRealtimeSync";
 import { trpc } from "@/lib/trpc";
 import TrelloDashboardLayout from "@/components/TrelloDashboardLayout";
 import { Button } from "@/components/ui/button";
-import { Plus, Loader2, MessageSquare, X, UserPlus, Users, Trash2, MoreHorizontal, Edit2, Archive, Settings2, AlignLeft, Tag, CheckSquare, Clock, LayoutGrid, Paperclip, History as HistoryIcon, Search, Sparkles, User as UserIcon, AlertCircle, CalendarClock, Columns3 } from "lucide-react";
+import { Plus, Loader2, MessageSquare, X, UserPlus, Users, Trash2, MoreHorizontal, Edit2, Archive, Settings2, AlignLeft, Tag, CheckSquare, Clock, LayoutGrid, Paperclip, History as HistoryIcon, Search, Sparkles, User as UserIcon, AlertCircle, CalendarClock, Columns3, Palette } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useState, useRef, useEffect, useMemo } from "react";
 import { formatDistanceToNow } from "date-fns";
@@ -30,6 +30,9 @@ import {
 } from "@dnd-kit/sortable";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { DraggableCard } from "@/components/DraggableCard";
+import BoardThemeDialog from "@/components/BoardThemeDialog";
+import { themeIcon } from "@/lib/themeIcons";
+import { getBoardTheme, type BoardSettings } from "@shared/boardThemes";
 import { AIChatBox, Message } from "@/components/AIChatBox";
 import { toast } from "sonner";
 import type { List as DBList, Card as DBCard } from "../../../drizzle/schema";
@@ -86,6 +89,7 @@ export default function BoardView() {
   const [showShareModal, setShowShareModal] = useState(false);
   const [showArchivedModal, setShowArchivedModal] = useState(false);
   const [showMirrorSettings, setShowMirrorSettings] = useState(false);
+  const [showThemeDialog, setShowThemeDialog] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     { role: "system", content: "You are a helpful assistant for the DStasks. You can help users organize their tasks, suggest project steps, and answer questions about their boards." }
   ]);
@@ -265,6 +269,8 @@ export default function BoardView() {
   const isAdminLike = user?.role === "admin" || user?.role === "master_admin";
   const isOwnerOrAdmin = user?.id === board.ownerId || isAdminLike;
   const hasLists = !!lists && (lists as DBList[]).length > 0;
+  const boardTheme = getBoardTheme((board as any).theme);
+  const ThemeIcon = themeIcon(boardTheme);
   const filtering = cardQuery.trim() !== "" || cardFilter !== "all";
 
   const filterChips: { key: CardFilter; label: string; icon: typeof UserIcon }[] = [
@@ -321,6 +327,19 @@ export default function BoardView() {
               {board.description && <p className="truncate px-1 text-[13px] text-muted-foreground">{board.description}</p>}
             </div>
 
+            {boardTheme.key !== "general" && (
+              <button
+                type="button"
+                onClick={() => isOwnerOrAdmin && setShowThemeDialog(true)}
+                className="inline-flex h-7 items-center gap-1.5 rounded-full px-2.5 text-xs font-semibold"
+                style={{ backgroundColor: `${boardTheme.palette.primary}22`, color: `color-mix(in srgb, ${boardTheme.palette.primary} 75%, var(--foreground))` }}
+                title={isEnglish ? "Board theme" : "Tema do quadro"}
+              >
+                <ThemeIcon className="h-3.5 w-3.5" />
+                {boardTheme.name}
+              </button>
+            )}
+
             <div className="flex items-center gap-1">
               <HeaderIconButton label={isEnglish ? "Recent activity" : "Últimas atividades"} onClick={() => setShowActivityModal(true)}>
                 <HistoryIcon className="h-4 w-4" />
@@ -328,7 +347,7 @@ export default function BoardView() {
               <HeaderIconButton label={isEnglish ? "Archived items" : "Itens arquivados"} onClick={() => setShowArchivedModal(true)}>
                 <Archive className="h-4 w-4" />
               </HeaderIconButton>
-              {isAdminLike && (
+              {isOwnerOrAdmin && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" aria-label={isEnglish ? "More" : "Mais opções"}>
@@ -336,12 +355,19 @@ export default function BoardView() {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-56">
-                    <DropdownMenuItem onClick={() => setShowMirrorSettings(true)}>
-                      <Settings2 className="h-4 w-4" /> {isEnglish ? "Mirroring settings" : "Configurar espelhamento"}
+                    <DropdownMenuItem onClick={() => setShowThemeDialog(true)}>
+                      <Palette className="h-4 w-4" /> {isEnglish ? "Customize theme" : "Personalizar tema"}
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={handleDeleteBoard} className="text-destructive focus:text-destructive">
-                      <Trash2 className="h-4 w-4" /> {isEnglish ? "Delete board" : "Excluir quadro"}
-                    </DropdownMenuItem>
+                    {isAdminLike && (
+                      <DropdownMenuItem onClick={() => setShowMirrorSettings(true)}>
+                        <Settings2 className="h-4 w-4" /> {isEnglish ? "Mirroring settings" : "Configurar espelhamento"}
+                      </DropdownMenuItem>
+                    )}
+                    {isAdminLike && (
+                      <DropdownMenuItem onClick={handleDeleteBoard} className="text-destructive focus:text-destructive">
+                        <Trash2 className="h-4 w-4" /> {isEnglish ? "Delete board" : "Excluir quadro"}
+                      </DropdownMenuItem>
+                    )}
                   </DropdownMenuContent>
                 </DropdownMenu>
               )}
@@ -492,6 +518,18 @@ export default function BoardView() {
             onClose={() => setShowShareModal(false)}
             boardId={boardId}
             isAdmin={isAdminLike}
+          />
+        )}
+
+        {/* Personalizar tema */}
+        {boardId && (
+          <BoardThemeDialog
+            isOpen={showThemeDialog}
+            onClose={() => setShowThemeDialog(false)}
+            boardId={boardId}
+            currentTheme={boardTheme.key}
+            currentSettings={((board as any).settings || {}) as BoardSettings}
+            existingLists={((lists as DBList[]) || []).map((list) => list.name)}
           />
         )}
 

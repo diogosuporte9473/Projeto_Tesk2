@@ -225,3 +225,57 @@ describe("auth.login", () => {
     expect(dataClientSignIn).not.toHaveBeenCalled();
   });
 });
+
+describe("boards.setTheme (tema por quadro)", () => {
+  it("usuário comum que não é dono não altera o tema", async () => {
+    // Quadro 10 pertence à alice (id 1); o admin-a (id 2) pode, um colega comum não.
+    tables.users.push({ id: 7, username: "carol", role: "user", tenant_id: TENANT_A });
+    await expect(callerFor(7).boards.setTheme({ id: 10, theme: "siem" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(tables.boards.find((b) => b.id === 10).theme).toBeUndefined();
+  });
+
+  it("admin de outro tenant não enxerga o quadro", async () => {
+    await expect(callerFor(4).boards.setTheme({ id: 10, theme: "crm" })).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("troca o tema sem tocar nos cartões e cria só as listas que faltam", async () => {
+    tables.lists.push({ id: 101, board_id: 10, tenant_id: TENANT_A, name: "triagem", position: 1 });
+    const cardsBefore = JSON.stringify(tables.cards);
+
+    const result = await callerFor(1).boards.setTheme({
+      id: 10,
+      theme: "siem",
+      createSuggestedLists: true,
+      settings: { detectionTools: [" Wazuh ", "wazuh", "", "Firewall X"] },
+    });
+
+    const board = tables.boards.find((b) => b.id === 10);
+    expect(board.theme).toBe("siem");
+    // Lista editável: sem vazios nem repetidos.
+    expect(board.settings.detectionTools).toEqual(["Wazuh", "Firewall X"]);
+    // Cartões intactos.
+    expect(JSON.stringify(tables.cards)).toBe(cardsBefore);
+    // "Triagem" já existia (com outra caixa): não é duplicada; "Lista A" permanece.
+    const names = tables.lists.filter((l) => l.board_id === 10).map((l) => l.name);
+    expect(names.filter((n) => n.toLowerCase() === "triagem")).toHaveLength(1);
+    expect(names).toContain("Lista A");
+    expect(names).toContain("Novo alerta");
+    expect(result.createdLists).not.toContain("Triagem");
+    // Listas de outro quadro não mudam.
+    expect(tables.lists.filter((l) => l.board_id === 20)).toHaveLength(1);
+  });
+
+  it("trocar de tema de novo preserva os ajustes do tema anterior", async () => {
+    await callerFor(2).boards.setTheme({ id: 10, theme: "siem", settings: { detectionTools: ["EDR"] } });
+    await callerFor(2).boards.setTheme({ id: 10, theme: "dev" });
+    const board = tables.boards.find((b) => b.id === 10);
+    expect(board.theme).toBe("dev");
+    expect(board.settings.detectionTools).toEqual(["EDR"]);
+    // Sem createSuggestedLists nenhuma lista é criada.
+    expect(tables.lists.filter((l) => l.board_id === 10)).toHaveLength(1);
+  });
+
+  it("rejeita tema desconhecido", async () => {
+    await expect(callerFor(1).boards.setTheme({ id: 10, theme: "financeiro" as any })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+});

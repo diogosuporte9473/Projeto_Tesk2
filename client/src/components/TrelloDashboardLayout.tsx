@@ -51,6 +51,8 @@ import { useTheme } from "@/contexts/ThemeContext";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { themeIcon } from "@/lib/themeIcons";
+import { BOARD_THEMES, SEGMENT_THEME_KEYS, getBoardTheme, type BoardThemeKey } from "@shared/boardThemes";
 
 interface TrelloDashboardLayoutProps {
   children: React.ReactNode;
@@ -101,6 +103,7 @@ export default function TrelloDashboardLayout({ children }: TrelloDashboardLayou
   const [showNewBoard, setShowNewBoard] = useState(false);
   const [newBoardName, setNewBoardName] = useState("");
   const [newBoardColor, setNewBoardColor] = useState(BOARD_COLORS[0]);
+  const [newBoardTheme, setNewBoardTheme] = useState<BoardThemeKey>("general");
 
   const toggleCollapsed = () => {
     setCollapsed((prev) => {
@@ -141,9 +144,11 @@ export default function TrelloDashboardLayout({ children }: TrelloDashboardLayou
         name,
         description: "",
         color: newBoardColor,
+        theme: newBoardTheme,
       });
       await utils.boards.list.invalidate();
       setNewBoardName("");
+      setNewBoardTheme("general");
       setShowNewBoard(false);
       toast.success(en ? "Board created" : "Quadro criado");
       if (created?.id) setLocation(`/board/${created.id}`);
@@ -511,6 +516,39 @@ export default function TrelloDashboardLayout({ children }: TrelloDashboardLayou
                   {newBoardColor === color && <Check className="h-4 w-4 text-white" />}
                 </button>
               ))}
+            </div>
+            <div>
+              <p className="mb-1.5 text-xs font-semibold text-muted-foreground">{en ? "Theme" : "Tema"}</p>
+              <div className="flex flex-wrap gap-1.5">
+                {(["general", ...SEGMENT_THEME_KEYS] as BoardThemeKey[]).map((key) => {
+                  const option = BOARD_THEMES[key];
+                  const Icon = themeIcon(option);
+                  const active = newBoardTheme === key;
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => {
+                        setNewBoardTheme(key);
+                        if (key !== "general") setNewBoardColor(option.palette.primary);
+                      }}
+                      aria-pressed={active}
+                      className={cn(
+                        "inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-[13px] font-medium transition-colors",
+                        active ? "border-primary/60 bg-primary/12 text-foreground" : "border-input text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      <Icon className="h-3.5 w-3.5" />
+                      {option.name}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                {newBoardTheme === "general"
+                  ? (en ? "Free board with an inbox list." : "Quadro livre, com uma lista Caixa de Entrada.")
+                  : (en ? "Starts with the suggested flow: " : "Começa com o fluxo sugerido: ") + getBoardTheme(newBoardTheme).lists.length + (en ? " lists." : " listas.")}
+              </p>
             </div>
           </div>
           <DialogFooter>
