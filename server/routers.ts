@@ -49,7 +49,7 @@ import { invokeLLM, Message } from "./_core/llm.js";
 import { ENV } from "./_core/env.js";
 
 import { supabase, createAuthClient } from "./_core/supabase.js";
-import { BOARD_THEME_KEYS, BOARD_SETTING_LIST_KEYS, DEFAULT_THEME, getBoardTheme, normalizeSettingList } from "../shared/boardThemes.js";
+import { BOARD_THEME_KEYS, BOARD_SETTING_LIST_KEYS, DEFAULT_THEME, getBoardTheme, normalizeSettingList, validateFieldValue } from "../shared/boardThemes.js";
 
 /**
  * Função utilitária para registrar logs de auditoria
@@ -2508,6 +2508,22 @@ export const appRouter = router({
         fieldType: z.enum(["text", "select", "date", "number"]).optional(),
       }))
       .mutation(async ({ input }) => {
+        // Campos do tema do quadro são validados por tipo; os demais campos
+        // (ex.: "Dados Adicionais" antigos) seguem livres, como antes.
+        const { data: cardRow } = await supabase.from("cards").select("list_id").eq("id", input.cardId).maybeSingle();
+        const { data: listRow } = cardRow
+          ? await supabase.from("lists").select("board_id").eq("id", cardRow.list_id).maybeSingle()
+          : { data: null as any };
+        const { data: boardRow } = listRow
+          ? await supabase.from("boards").select("*").eq("id", listRow.board_id).maybeSingle()
+          : { data: null as any };
+        const theme = getBoardTheme(boardRow?.theme);
+        const themeField = theme.fields.find((f) => f.key === input.fieldName);
+        if (themeField) {
+          const problem = validateFieldValue(theme, themeField, input.fieldValue, boardRow?.settings);
+          if (problem) throw new TRPCError({ code: "BAD_REQUEST", message: problem });
+        }
+
         const { error } = await supabase
           .from("card_custom_fields")
           .upsert({

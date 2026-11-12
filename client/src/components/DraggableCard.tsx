@@ -6,6 +6,15 @@ import { format, isBefore, isToday } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import CardDetailModal from "./CardDetailModal";
+import { valueTone } from "@shared/boardThemes";
+
+const TONE_CLASS: Record<ReturnType<typeof valueTone>, string> = {
+  critical: "bg-red-500/15 text-red-600 dark:text-red-400",
+  high: "bg-orange-500/15 text-orange-600 dark:text-orange-400",
+  medium: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
+  low: "bg-sky-500/12 text-sky-600 dark:text-sky-400",
+  neutral: "bg-foreground/[0.07] text-muted-foreground",
+};
 
 interface Label {
   id: number;
@@ -28,6 +37,8 @@ interface DraggableCardProps {
   checklistCount?: number;
   completedChecklistCount?: number;
   attachmentCount?: number;
+  /** Selo do tema do quadro (ex.: Severidade: Crítica). */
+  highlight?: { label: string; value: string } | null;
   onChecklistChange?: (completed: number, total: number) => void;
 }
 
@@ -63,6 +74,7 @@ export function DraggableCard({
   checklistCount: initialChecklistCount = 0,
   completedChecklistCount: initialCompletedCount = 0,
   attachmentCount = 0,
+  highlight,
   onChecklistChange,
 }: DraggableCardProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -146,6 +158,16 @@ export function DraggableCard({
                 </span>
               )}
             </div>
+          )}
+
+          {/* Selo do segmento */}
+          {highlight?.value && (
+            <span
+              className={cn("inline-flex w-fit max-w-full items-center gap-1 rounded-md px-1.5 py-0.5 text-[10.5px] font-semibold leading-4", TONE_CLASS[valueTone(highlight.value)])}
+              title={highlight.label}
+            >
+              <span className="truncate">{highlight.value}</span>
+            </span>
           )}
 
           {/* Título */}

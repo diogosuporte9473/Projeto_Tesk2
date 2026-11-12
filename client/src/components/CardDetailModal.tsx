@@ -40,6 +40,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/contexts/LanguageContext";
+import SegmentFields from "./SegmentFields";
 
 interface CardDetailModalProps {
   isOpen: boolean;
@@ -1158,6 +1159,9 @@ export default function CardDetailModal({
                   />
                 </div>
               </section>
+
+              {/* Campos do segmento (tema do quadro) */}
+              <SegmentFields cardId={cardId} boardId={boardId} />
 
               {/* Custom Fields Section */}
               <section className="space-y-6">
