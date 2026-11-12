@@ -1,7 +1,7 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import TrelloDashboardLayout, { openNewBoardDialog } from "@/components/TrelloDashboardLayout";
-import { Loader2, Layout, CheckSquare, Sparkles, ShieldCheck, Plus, Users, ArrowRight } from "lucide-react";
+import { Loader2, Layout, CheckSquare, Sparkles, Plus, Users, ArrowRight } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
@@ -78,12 +78,9 @@ export default function Home() {
       <div className="min-h-screen dms-grid text-[#e8eaed] flex flex-col">
         <header className="flex items-center gap-3 px-6 py-5 lg:px-12">
           <div className="w-10 h-10 rounded-xl border border-[#00d9ff40] bg-[#00d9ff14] flex items-center justify-center">
-            <ShieldCheck className="w-5 h-5 text-[#00d9ff]" />
+            <CheckSquare className="w-5 h-5 text-[#00d9ff]" />
           </div>
-          <div className="leading-tight">
-            <p className="font-bold tracking-wide" style={{ fontFamily: "var(--font-display)" }}>DMS</p>
-            <p className="text-[10px] tracking-[0.3em] text-[#00d9ff]">SECURITY</p>
-          </div>
+          <p className="text-lg font-bold tracking-tight" style={{ fontFamily: "var(--font-display)" }}>DStasks</p>
         </header>
 
         <main className="flex-1 flex items-center px-6 pb-12 lg:px-12">
@@ -91,7 +88,7 @@ export default function Home() {
             <section className="hidden lg:block">
               <span className="dms-badge">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#00d9ff] animate-pulse" />
-                Gestão de tarefas do grupo DMS Security
+                Gestão de tarefas para equipes
               </span>
               <h1 className="mt-6 text-5xl xl:text-6xl font-bold leading-tight">
                 Bem-vindo ao
@@ -186,6 +183,7 @@ export default function Home() {
             </section>
           </div>
         </main>
+        <footer className="px-6 pb-4 text-center text-[10px] tracking-wide text-[#a0aec0]/50">por DMS Security</footer>
       </div>
     );
   }
