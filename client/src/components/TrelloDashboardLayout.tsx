@@ -53,6 +53,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { themeIcon } from "@/lib/themeIcons";
+import NotificationBell from "@/components/NotificationBell";
 import { BOARD_THEMES, SEGMENT_THEME_KEYS, getBoardTheme, type BoardThemeKey } from "@shared/boardThemes";
 
 interface TrelloDashboardLayoutProps {
@@ -246,6 +247,7 @@ export default function TrelloDashboardLayout({ children }: TrelloDashboardLayou
         <SideLink href="/dashboard" active={location === "/dashboard"} compact={compact} label={en ? "Dashboard" : "Painel"}>
           <BarChart3 className="h-4 w-4 flex-shrink-0" />
         </SideLink>
+        <NotificationBell compact={compact} />
 
         <div className={cn("mb-1 mt-5 flex items-center justify-between px-2", compact && "justify-center px-0")}>
           {!compact && (

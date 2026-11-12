@@ -51,6 +51,8 @@ import { ENV } from "./_core/env.js";
 import { supabase, createAuthClient } from "./_core/supabase.js";
 import { BOARD_THEME_KEYS, BOARD_SETTING_LIST_KEYS, DEFAULT_THEME, getBoardTheme, normalizeSettingList, validateFieldValue } from "../shared/boardThemes.js";
 import { computeBoardMetrics, sumTotals, type MetricCard, type MetricList } from "../shared/boardMetrics.js";
+import { TRIGGER_TYPES, CONDITION_OPS, NOTIFY_TARGETS } from "../shared/automationRules.js";
+import { runAutomations, runScheduledAutomations } from "./automations.js";
 
 /**
  * Função utilitária para registrar logs de auditoria
@@ -258,7 +260,203 @@ async function loadBoardsData(boardIds: number[]): Promise<Map<number, { lists: 
   return out;
 }
 
+// ---------------------------------------------------------------- Fase 4
+const automationTriggerSchema = z.object({
+  type: z.enum(TRIGGER_TYPES),
+  list: z.string().max(255).optional(),
+  field: z.string().max(255).optional(),
+  days: z.number().int().min(0).max(365).optional(),
+});
+const automationConditionSchema = z.object({
+  field: z.string().min(1).max(255),
+  op: z.enum(CONDITION_OPS),
+  value: z.string().max(500).optional(),
+});
+const automationActionSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("notify"), target: z.enum(NOTIFY_TARGETS), message: z.string().max(500).optional() }),
+  z.object({ type: z.literal("set_field"), field: z.string().min(1).max(255), value: z.string().max(500) }),
+  z.object({ type: z.literal("move_to_list"), list: z.string().min(1).max(255) }),
+  z.object({ type: z.literal("assign"), userId: z.number().int() }),
+  z.object({ type: z.literal("add_checklist"), title: z.string().min(1).max(255), items: z.array(z.string().min(1).max(255)).max(20) }),
+  z.object({ type: z.literal("add_comment"), text: z.string().min(1).max(1000) }),
+]);
+const automationRuleSchema = z.object({
+  name: z.string().min(1).max(120),
+  trigger: automationTriggerSchema,
+  conditions: z.array(automationConditionSchema).max(5).default([]),
+  actions: z.array(automationActionSchema).min(1).max(5),
+});
+
+/** Só o dono do quadro ou um administrador da empresa gerencia automações. */
+async function assertCanManageBoard(ctx: { user: any; tenantId?: string | null }, boardId: number) {
+  const board: any = await getBoardById(boardId, ctx.user.id, ctx.tenantId || undefined, ctx.user.role, true);
+  if (!board) throw new TRPCError({ code: "NOT_FOUND", message: "Quadro não encontrado" });
+  const isOwner = (board.ownerId ?? board.owner_id) === ctx.user.id;
+  if (!isOwner && !isTenantAdmin(ctx.user)) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Apenas o dono do quadro ou um administrador gerencia automações" });
+  }
+  return board;
+}
+
+const MISSING_TABLE = "As automações ainda não foram habilitadas no banco. Execute a migração drizzle/0011_automations.sql.";
+const isMissingTable = (error: any) => /automations|automation_runs|notifications|schema cache|does not exist/i.test(error?.message || "");
+
+/** Uma ação "atribuir" só pode apontar para usuário da empresa do quadro. */
+async function assertActionsInTenant(actions: { type: string; userId?: number }[], tenantId: string) {
+  for (const action of actions) {
+    if (action.type !== "assign") continue;
+    const { data: user } = await supabase.from("users").select("*").eq("id", action.userId).maybeSingle();
+    if (!user || (user as any).tenant_id !== tenantId) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "O responsável escolhido não pertence a esta empresa" });
+    }
+  }
+}
+
+const automationsRouter = router({
+  list: guardedProcedure({ boardId: "board" })
+    .input(z.object({ boardId: z.number() }))
+    .query(async ({ input }) => {
+      const { data, error } = await supabase.from("automations").select("*").eq("board_id", input.boardId).order("created_at", { ascending: true });
+      if (error) {
+        if (isMissingTable(error)) return { ready: false, rules: [] as any[] };
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: error.message });
+      }
+      return {
+        ready: true,
+        rules: ((data || []) as any[]).map((r) => ({
+          id: r.id as number,
+          name: r.name as string,
+          trigger: r.trigger,
+          conditions: r.conditions || [],
+          actions: r.actions || [],
+          enabled: !!r.enabled,
+          runCount: r.run_count || 0,
+          lastRunAt: r.last_run_at || null,
+        })),
+      };
+    }),
+
+  history: guardedProcedure({ boardId: "board" })
+    .input(z.object({ boardId: z.number() }))
+    .query(async ({ input }) => {
+      const { data, error } = await supabase
+        .from("automation_runs")
+        .select("*")
+        .eq("board_id", input.boardId)
+        .order("created_at", { ascending: false })
+        .range(0, 49);
+      if (error) return [];
+      return ((data || []) as any[]).map((r) => ({
+        id: r.id as number,
+        automationId: r.automation_id as number,
+        cardId: r.card_id as number | null,
+        cardTitle: r.card_title as string | null,
+        status: r.status as string,
+        detail: r.detail as string | null,
+        createdAt: r.created_at as string,
+      }));
+    }),
+
+  create: guardedProcedure({ boardId: "board" })
+    .input(z.object({ boardId: z.number(), rule: automationRuleSchema }))
+    .mutation(async ({ ctx, input }) => {
+      const board = await assertCanManageBoard(ctx, input.boardId);
+      const tenantId = board.tenantId ?? board.tenant_id;
+      await assertActionsInTenant(input.rule.actions, tenantId);
+      const { data, error } = await supabase
+        .from("automations")
+        .insert({
+          board_id: input.boardId,
+          tenant_id: tenantId,
+          name: input.rule.name,
+          trigger: input.rule.trigger,
+          conditions: input.rule.conditions,
+          actions: input.rule.actions,
+          enabled: true,
+          created_by: ctx.user.id,
+        })
+        .select("id")
+        .single();
+      if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: isMissingTable(error) ? MISSING_TABLE : error.message });
+      await createAuditLog({
+        userId: ctx.user.id, tenantId: ctx.tenantId, action: "create", entityType: "board",
+        entityId: (data as any).id, entityName: input.rule.name, details: `Automação criada no quadro ${board.name}`,
+      });
+      return { id: (data as any).id as number };
+    }),
+
+  update: guardedProcedure({ boardId: "board" })
+    .input(z.object({ boardId: z.number(), id: z.number(), rule: automationRuleSchema.optional(), enabled: z.boolean().optional() }))
+    .mutation(async ({ ctx, input }) => {
+      const board = await assertCanManageBoard(ctx, input.boardId);
+      const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+      if (input.rule) {
+        await assertActionsInTenant(input.rule.actions, board.tenantId ?? board.tenant_id);
+        Object.assign(patch, { name: input.rule.name, trigger: input.rule.trigger, conditions: input.rule.conditions, actions: input.rule.actions });
+      }
+      if (input.enabled !== undefined) patch.enabled = input.enabled;
+      // O filtro por board_id impede alterar regra de outro quadro pelo id.
+      const { error } = await supabase.from("automations").update(patch).eq("id", input.id).eq("board_id", input.boardId);
+      if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: isMissingTable(error) ? MISSING_TABLE : error.message });
+      await createAuditLog({
+        userId: ctx.user.id, tenantId: ctx.tenantId, action: "update", entityType: "board",
+        entityId: input.id, entityName: input.rule?.name || `Automação ${input.id}`,
+        details: input.enabled === undefined ? "Automação editada" : input.enabled ? "Automação ativada" : "Automação desativada",
+      });
+      return { success: true };
+    }),
+
+  delete: guardedProcedure({ boardId: "board" })
+    .input(z.object({ boardId: z.number(), id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      await assertCanManageBoard(ctx, input.boardId);
+      const { error } = await supabase.from("automations").delete().eq("id", input.id).eq("board_id", input.boardId);
+      if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: error.message });
+      await createAuditLog({
+        userId: ctx.user.id, tenantId: ctx.tenantId, action: "delete", entityType: "board",
+        entityId: input.id, entityName: `Automação ${input.id}`, details: "Automação excluída",
+      });
+      return { success: true };
+    }),
+
+  // Gatilhos de tempo: o cliente chama ao abrir o quadro; o motor limita a
+  // frequência (30 min por regra, uma vez por dia por cartão).
+  runScheduled: guardedProcedure({ boardId: "board" })
+    .input(z.object({ boardId: z.number() }))
+    .mutation(async ({ input }) => ({ ran: await runScheduledAutomations(input.boardId) })),
+});
+
+const notificationsRouter = router({
+  list: protectedProcedure.query(async ({ ctx }) => {
+    const { data, error } = await supabase
+      .from("notifications")
+      .select("*")
+      .eq("user_id", ctx.user.id)
+      .order("created_at", { ascending: false })
+      .range(0, 29);
+    if (error) return { items: [] as any[], unread: 0 };
+    const items = ((data || []) as any[]).map((n) => ({
+      id: n.id as number,
+      title: n.title as string,
+      message: n.message as string | null,
+      read: !!n.read,
+      boardId: n.related_board_id as number | null,
+      cardId: n.related_card_id as number | null,
+      createdAt: n.created_at as string,
+    }));
+    return { items, unread: items.filter((n) => !n.read).length };
+  }),
+  markAllRead: protectedProcedure.mutation(async ({ ctx }) => {
+    // Sempre restrito ao próprio usuário.
+    const { error } = await supabase.from("notifications").update({ read: true }).eq("user_id", ctx.user.id).eq("read", false);
+    if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: error.message });
+    return { success: true };
+  }),
+});
+
 export const appRouter = router({
+  automations: automationsRouter,
+  notifications: notificationsRouter,
     // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
   system: systemRouter,
   audit: auditRouter,
@@ -1034,6 +1232,8 @@ export const appRouter = router({
             details: `Cartão criado: ${input.title}`
           });
 
+          await runAutomations({ type: "card_created", cardId: data.id });
+
           return { id: data.id };
         } catch (err: any) {
           console.error("[Database] Unexpected error during card creation:", err);
@@ -1141,6 +1341,8 @@ export const appRouter = router({
         })
       )
       .mutation(async ({ ctx, input }) => {
+        const { data: before } = await supabase.from("cards").select("*").eq("id", input.cardId).maybeSingle();
+        const previousListId = (before as any)?.list_id;
         const { error } = await supabase
           .from("cards")
           .update({
@@ -1154,6 +1356,11 @@ export const appRouter = router({
             code: "INTERNAL_SERVER_ERROR",
             message: `Erro ao reordenar cartão: ${error.message}`,
           });
+        }
+
+        if (previousListId !== input.newListId) {
+          const { data: destination } = await supabase.from("lists").select("*").eq("id", input.newListId).maybeSingle();
+          await runAutomations({ type: "card_moved", cardId: input.cardId, toList: (destination as any)?.name });
         }
 
         return { success: true };
@@ -1652,6 +1859,8 @@ export const appRouter = router({
           throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: error.message });
         }
 
+        if (input.status === "completed") await runAutomations({ type: "card_completed", cardId: input.cardId });
+
         return { success: true };
       }),
 
@@ -1729,6 +1938,8 @@ export const appRouter = router({
           .eq("id", input.cardId);
 
         if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Falha ao mover cartão" });
+        const { data: destination } = await supabase.from("lists").select("*").eq("id", input.targetListId).maybeSingle();
+        await runAutomations({ type: "card_moved", cardId: input.cardId, toList: (destination as any)?.name });
         return { success: true };
       }),
 
@@ -2595,6 +2806,8 @@ export const appRouter = router({
           }, { onConflict: 'card_id,field_name' });
 
         if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: error.message });
+
+        await runAutomations({ type: "field_changed", cardId: input.cardId, field: input.fieldName });
 
         // Sincronizar com espelhos e Trigger Realtime
         try {

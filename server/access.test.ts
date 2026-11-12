@@ -6,11 +6,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  */
 const { tables, fakeSupabase, dataClientSignIn, authClientSignIn, createAuthClient } = vi.hoisted(() => {
   const tables: Record<string, any[]> = {};
+  const state = { seq: 90000 };
 
   class Query {
     private filters: Array<(row: any) => boolean> = [];
     private op: "select" | "delete" | "update" = "select";
     private patch: any = null;
+    private inserted: any[] | null = null;
     constructor(private table: string) {}
 
     select() { return this; }
@@ -23,12 +25,28 @@ const { tables, fakeSupabase, dataClientSignIn, authClientSignIn, createAuthClie
     delete() { this.op = "delete"; return this; }
     update(patch: any) { this.op = "update"; this.patch = patch; return this; }
     insert(row: any) {
-      (tables[this.table] ||= []).push(...(Array.isArray(row) ? row : [row]));
+      const rows = (Array.isArray(row) ? row : [row]).map((r) => ({ ...r }));
+      for (const r of rows) {
+        if (r.id == null) r.id = ++state.seq;
+        if (r.created_at == null) r.created_at = new Date().toISOString();
+      }
+      (tables[this.table] ||= []).push(...rows);
+      this.inserted = rows;
       return this;
     }
-    upsert(row: any) { return this.insert(row); }
+    upsert(row: any, options?: { onConflict?: string }) {
+      const keys = (options?.onConflict || "").split(",").map((k) => k.trim()).filter(Boolean);
+      if (keys.length > 0) {
+        const rows = Array.isArray(row) ? row : [row];
+        tables[this.table] = (tables[this.table] || []).filter(
+          (existing) => !rows.some((r) => keys.every((k) => existing[k] === r[k]))
+        );
+      }
+      return this.insert(row);
+    }
 
     private run() {
+      if (this.inserted) return this.inserted;
       const all = tables[this.table] || [];
       const matched = all.filter((r) => this.filters.every((f) => f(r)));
       if (this.op === "delete") tables[this.table] = all.filter((r) => !matched.includes(r));
@@ -328,5 +346,120 @@ describe("stats (indicadores por quadro)", () => {
     const overview = await callerFor(1).stats.overview();
     expect(overview.boards.map((b) => b.boardId)).not.toContain(20);
     expect(overview.totals.total).toBe(overview.boards.reduce((t, b) => t + b.totals.total, 0));
+  });
+});
+
+describe("automations (Fase 4)", () => {
+  const criticalRule = {
+    name: "Crítico: avisar admins",
+    trigger: { type: "field_changed" as const, field: "Severidade" },
+    conditions: [{ field: "Severidade", op: "eq" as const, value: "Crítica" }],
+    actions: [{ type: "notify" as const, target: "admins" as const, message: "Incidente crítico" }],
+  };
+
+  beforeEach(() => {
+    const board = tables.boards.find((b) => b.id === 10);
+    board.theme = "siem";
+    board.settings = {};
+    tables.lists.push({ id: 101, board_id: 10, tenant_id: TENANT_A, name: "Contenção", position: 1 });
+  });
+
+  it("só o dono do quadro ou um admin da empresa cria regras", async () => {
+    tables.users.push({ id: 7, username: "carol", role: "user", tenant_id: TENANT_A });
+    await expect(callerFor(7).automations.create({ boardId: 10, rule: criticalRule })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(callerFor(4).automations.create({ boardId: 10, rule: criticalRule })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(tables.automations || []).toHaveLength(0);
+    await callerFor(1).automations.create({ boardId: 10, rule: criticalRule }); // dona
+    await callerFor(2).automations.create({ boardId: 10, rule: criticalRule }); // admin
+    expect(tables.automations).toHaveLength(2);
+  });
+
+  it("campo alterado + condição: notifica só os admins da própria empresa", async () => {
+    await callerFor(2).automations.create({ boardId: 10, rule: criticalRule });
+
+    await callerFor(1).cardDetails.upsertCustomField({ cardId: 1000, fieldName: "Severidade", fieldValue: "Alta" });
+    expect(tables.notifications || []).toHaveLength(0); // condição não atendida
+
+    await callerFor(1).cardDetails.upsertCustomField({ cardId: 1000, fieldName: "Severidade", fieldValue: "Crítica" });
+    expect(tables.notifications.map((n: any) => n.user_id)).toEqual([2]); // admin-a; nunca o admin-b (id 4)
+    expect(tables.notifications[0].tenant_id).toBe(TENANT_A);
+    expect(tables.automation_runs).toHaveLength(1);
+    expect(tables.automation_runs[0]).toMatchObject({ status: "ok", card_id: 1000 });
+  });
+
+  it("regra desativada não roda", async () => {
+    const { id } = await callerFor(2).automations.create({ boardId: 10, rule: criticalRule });
+    await callerFor(2).automations.update({ boardId: 10, id, enabled: false });
+    await callerFor(1).cardDetails.upsertCustomField({ cardId: 1000, fieldName: "Severidade", fieldValue: "Crítica" });
+    expect(tables.notifications || []).toHaveLength(0);
+  });
+
+  it("cartão movido para a lista: cria o checklist uma única vez", async () => {
+    await callerFor(2).automations.create({
+      boardId: 10,
+      rule: {
+        name: "Procedimento de contenção",
+        trigger: { type: "card_moved", list: "contenção" },
+        conditions: [],
+        actions: [{ type: "add_checklist", title: "Resposta", items: ["Isolar", "Preservar evidências"] }],
+      },
+    });
+    await callerFor(1).cardDetails.moveCard({ cardId: 1000, targetListId: 101 });
+    expect(tables.card_checklist_groups.filter((g: any) => g.card_id === 1000)).toHaveLength(1);
+    expect(tables.card_checklists.filter((i: any) => i.card_id === 1000 && i.group_id != null).map((i: any) => i.title)).toEqual(["Isolar", "Preservar evidências"]);
+
+    await callerFor(1).cardDetails.moveCard({ cardId: 1000, targetListId: 100 });
+    await callerFor(1).cardDetails.moveCard({ cardId: 1000, targetListId: 101 });
+    expect(tables.card_checklist_groups.filter((g: any) => g.card_id === 1000)).toHaveLength(1);
+  });
+
+  it("ação com erro não derruba a ação do usuário e fica no histórico", async () => {
+    await callerFor(2).automations.create({
+      boardId: 10,
+      rule: { name: "Mover para lista inexistente", trigger: { type: "card_completed" }, conditions: [], actions: [{ type: "move_to_list", list: "Não existe" }] },
+    });
+    await expect(callerFor(1).cardDetails.updateStatus({ cardId: 1000, status: "completed" })).resolves.toMatchObject({ success: true });
+    expect(tables.cards.find((c) => c.id === 1000).status).toBe("completed");
+    expect(tables.automation_runs[0].status).toBe("error");
+  });
+
+  it("não aceita atribuir cartão a usuário de outra empresa", async () => {
+    await expect(
+      callerFor(2).automations.create({
+        boardId: 10,
+        rule: { name: "Atribuir", trigger: { type: "card_created" }, conditions: [], actions: [{ type: "assign", userId: 3 }] },
+      })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  it("admin de outro tenant não altera nem apaga regra pelo id", async () => {
+    const { id } = await callerFor(2).automations.create({ boardId: 10, rule: criticalRule });
+    await callerFor(4).automations.update({ boardId: 20, id, enabled: false });
+    await callerFor(4).automations.delete({ boardId: 20, id });
+    expect(tables.automations.find((a: any) => a.id === id)).toMatchObject({ enabled: true });
+  });
+
+  it("gatilho de tempo: roda uma vez por cartão e respeita o intervalo", async () => {
+    tables.cards.find((c) => c.id === 1000).due_date = new Date(Date.now() - 86400000).toISOString();
+    await callerFor(2).automations.create({
+      boardId: 10,
+      rule: { name: "Atrasados", trigger: { type: "overdue" }, conditions: [], actions: [{ type: "notify", target: "owner" }] },
+    });
+    expect(await callerFor(1).automations.runScheduled({ boardId: 10 })).toEqual({ ran: 1 });
+    expect(tables.notifications.map((n: any) => n.user_id)).toEqual([1]); // dona do quadro
+    expect(await callerFor(1).automations.runScheduled({ boardId: 10 })).toEqual({ ran: 0 });
+    expect(tables.notifications).toHaveLength(1);
+  });
+
+  it("notificações: cada usuário vê e marca só as suas", async () => {
+    tables.notifications = [
+      { id: 1, user_id: 1, tenant_id: TENANT_A, title: "Para alice", read: false, created_at: new Date().toISOString() },
+      { id: 2, user_id: 3, tenant_id: TENANT_B, title: "Para bob", read: false, created_at: new Date().toISOString() },
+    ];
+    const mine = await callerFor(1).notifications.list();
+    expect(mine.items.map((n) => n.title)).toEqual(["Para alice"]);
+    expect(mine.unread).toBe(1);
+    await callerFor(1).notifications.markAllRead();
+    expect(tables.notifications.map((n: any) => n.read)).toEqual([true, false]);
   });
 });
