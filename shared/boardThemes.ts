@@ -41,6 +41,8 @@ export interface BoardTheme {
   features: string[];
   /** Fluxo Kanban sugerido (listas). */
   lists: string[];
+  /** Listas que contam como trabalho encerrado nos indicadores. */
+  doneLists: string[];
   categories: string[];
   /** Classificações próprias do segmento (severidade, tipo de tarefa...). */
   classifications: { label: string; options: string[] }[];
@@ -74,6 +76,7 @@ export const BOARD_THEMES: Record<BoardThemeKey, BoardTheme> = {
     palette: { primary: "#00d9ff", secondary: "#3b82f6" },
     features: ["Listas e cartões livres", "Checklists, etiquetas e anexos", "Sem campos obrigatórios"],
     lists: ["A fazer", "Em andamento", "Concluído"],
+    doneLists: ["Concluído"],
     categories: [],
     classifications: [],
     fields: [],
@@ -90,6 +93,7 @@ export const BOARD_THEMES: Record<BoardThemeKey, BoardTheme> = {
     palette: { primary: "#f59e0b", secondary: "#ef4444" },
     features: ["Fluxo com validação e aprovação", "Campos de produto, SKU e pedido", "Indicadores de pedidos, estoque e devoluções"],
     lists: ["Backlog", "Planejamento", "Em execução", "Aguardando validação", "Aguardando aprovação", "Concluído"],
+    doneLists: ["Concluído"],
     categories: [
       "Cadastro de produtos", "Gestão de estoque", "Integração de marketplaces", "Pedidos", "Faturamento",
       "Logística", "Entregas", "Devoluções", "Atendimento", "Marketing", "Campanhas", "Melhorias da plataforma",
@@ -133,6 +137,7 @@ export const BOARD_THEMES: Record<BoardThemeKey, BoardTheme> = {
     palette: { primary: "#22c55e", secondary: "#14b8a6" },
     features: ["Funil do lead ao fechamento", "Campos de contato, valor e probabilidade", "Indicadores de pipeline e conversão"],
     lists: ["Novo lead", "Qualificação", "Primeiro contato", "Em negociação", "Proposta enviada", "Aguardando retorno", "Ganho", "Perdido"],
+    doneLists: ["Ganho", "Perdido"],
     categories: ["Prospecção", "Leads", "Contatos", "Oportunidades", "Negociação", "Propostas", "Reuniões", "Follow-up", "Pós-venda", "Retenção"],
     classifications: [{ label: "Prioridade", options: ["Baixa", "Média", "Alta"] }],
     fields: [
@@ -176,6 +181,7 @@ export const BOARD_THEMES: Record<BoardThemeKey, BoardTheme> = {
     palette: { primary: "#ef4444", secondary: "#9d4edd" },
     features: ["Fluxo da triagem ao encerramento", "Severidade, IoCs, ativos e evidências", "SLA, MTTA e MTTR"],
     lists: ["Novo alerta", "Triagem", "Em investigação", "Análise técnica", "Contenção", "Mitigação", "Monitoramento", "Resolvido", "Encerrado"],
+    doneLists: ["Resolvido", "Encerrado"],
     categories: [
       "Malware", "Ransomware", "Tentativa de invasão", "Brute Force", "Port Scan", "Movimentação lateral",
       "Acesso indevido", "Vulnerabilidade", "Phishing", "Exfiltração de dados", "Anomalia de comportamento", "Falha de segurança",
@@ -231,6 +237,7 @@ export const BOARD_THEMES: Record<BoardThemeKey, BoardTheme> = {
     palette: { primary: "#6366f1", secondary: "#00d9ff" },
     features: ["Fluxo do backlog à produção", "Sprint, story points, branch e pull request", "Velocidade, burndown, lead e cycle time"],
     lists: ["Backlog", "Refinamento", "Planejamento", "Em desenvolvimento", "Code Review", "Testes", "Homologação", "Aguardando Deploy", "Produção", "Concluído"],
+    doneLists: ["Produção", "Concluído"],
     categories: ["Feature", "Bug", "Hotfix", "Melhoria", "Débito técnico", "Documentação", "Refatoração", "Infraestrutura"],
     classifications: [{ label: "Prioridade", options: ["Baixa", "Média", "Alta", "Crítica"] }],
     fields: [

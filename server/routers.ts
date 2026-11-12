@@ -50,6 +50,7 @@ import { ENV } from "./_core/env.js";
 
 import { supabase, createAuthClient } from "./_core/supabase.js";
 import { BOARD_THEME_KEYS, BOARD_SETTING_LIST_KEYS, DEFAULT_THEME, getBoardTheme, normalizeSettingList, validateFieldValue } from "../shared/boardThemes.js";
+import { computeBoardMetrics, sumTotals, type MetricCard, type MetricList } from "../shared/boardMetrics.js";
 
 /**
  * Função utilitária para registrar logs de auditoria
@@ -196,6 +197,66 @@ const boardMirrorSettingsRouter = router({
       return { success: true };
     }),
 });
+
+/**
+ * Carrega listas e cartões (com responsável e campos do segmento) de um
+ * conjunto de quadros, em poucas consultas. Só lê; quem chama já validou
+ * o acesso aos quadros.
+ */
+async function loadBoardsData(boardIds: number[]): Promise<Map<number, { lists: MetricList[]; cards: MetricCard[] }>> {
+  const out = new Map<number, { lists: MetricList[]; cards: MetricCard[] }>();
+  for (const id of boardIds) out.set(id, { lists: [], cards: [] });
+  if (boardIds.length === 0) return out;
+
+  const { data: listRows, error: listError } = await supabase.from("lists").select("*").in("board_id", boardIds);
+  if (listError) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: listError.message });
+  const boardOfList = new Map<number, number>();
+  for (const row of (listRows || []) as any[]) {
+    boardOfList.set(row.id, row.board_id);
+    out.get(row.board_id)?.lists.push({ id: row.id, name: row.name, position: row.position });
+  }
+  const listIds = Array.from(boardOfList.keys());
+  if (listIds.length === 0) return out;
+
+  const { data: cardRows, error: cardError } = await supabase.from("cards").select("*").in("list_id", listIds).eq("archived", false);
+  if (cardError) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: cardError.message });
+  const cardsRaw = (cardRows || []) as any[];
+  const cardIds = cardsRaw.map((c) => c.id);
+  const userIds = Array.from(new Set(cardsRaw.map((c) => c.assigned_to).filter((id) => id != null)));
+
+  const [fieldsRes, usersRes] = await Promise.all([
+    cardIds.length
+      ? supabase.from("card_custom_fields").select("card_id, field_name, field_value").in("card_id", cardIds)
+      : Promise.resolve({ data: [] as any[] }),
+    userIds.length
+      ? supabase.from("users").select("id, name, username").in("id", userIds)
+      : Promise.resolve({ data: [] as any[] }),
+  ]);
+  const userName = new Map<number, string>(((usersRes.data || []) as any[]).map((u) => [u.id, u.name || u.username]));
+  const fieldsOf = new Map<number, Record<string, string>>();
+  for (const f of (fieldsRes.data || []) as any[]) {
+    if (!f.field_value) continue;
+    if (!fieldsOf.has(f.card_id)) fieldsOf.set(f.card_id, {});
+    fieldsOf.get(f.card_id)![f.field_name] = f.field_value;
+  }
+
+  for (const c of cardsRaw) {
+    const boardId = boardOfList.get(c.list_id);
+    if (boardId == null) continue;
+    out.get(boardId)?.cards.push({
+      id: c.id,
+      listId: c.list_id,
+      title: c.title,
+      status: c.status,
+      dueDate: c.due_date,
+      createdAt: c.created_at,
+      updatedAt: c.updated_at,
+      assignedToName: c.assigned_to != null ? userName.get(c.assigned_to) || null : null,
+      fields: fieldsOf.get(c.id) || {},
+    });
+  }
+  return out;
+}
 
 export const appRouter = router({
     // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
@@ -3163,6 +3224,58 @@ export const appRouter = router({
 
   // Statistics/Dashboard
   stats: router({
+    // Fase 3 — indicadores de um quadro, calculados com dados reais.
+    board: guardedProcedure({ boardId: "board" })
+      .input(z.object({ boardId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const board: any = await getBoardById(input.boardId, ctx.user.id, ctx.tenantId || undefined, ctx.user.role, true);
+        if (!board) throw new TRPCError({ code: "NOT_FOUND", message: "Quadro não encontrado" });
+        const data = (await loadBoardsData([input.boardId])).get(input.boardId)!;
+        return {
+          boardId: input.boardId,
+          boardName: board.name as string,
+          ...computeBoardMetrics({ theme: board.theme, lists: data.lists, cards: data.cards }),
+        };
+      }),
+
+    // Painel geral: só os quadros que o usuário enxerga (mesma regra da
+    // barra lateral). Cada quadro vem identificado pelo seu segmento.
+    overview: protectedProcedure.query(async ({ ctx }) => {
+      const boards = ((await getUserBoards(ctx.user.id, ctx.tenantId || undefined, ctx.user.role)) || []) as any[];
+      const data = await loadBoardsData(boards.map((b) => b.id));
+      const perBoard = boards.map((b) => {
+        const d = data.get(b.id) || { lists: [], cards: [] };
+        const metrics = computeBoardMetrics({ theme: b.theme, lists: d.lists, cards: d.cards });
+        return {
+          boardId: b.id as number,
+          boardName: b.name as string,
+          color: (b.color as string) || null,
+          tenantName: (b.tenantName as string) || null,
+          theme: metrics.theme,
+          themeName: metrics.themeName,
+          totals: metrics.totals,
+          weekly: metrics.weekly,
+          byAssignee: metrics.breakdowns.find((x) => x.key === "byAssignee")?.items || [],
+        };
+      });
+
+      const weekly = (perBoard[0]?.weekly || []).map((w, i) => ({
+        weekStart: w.weekStart,
+        created: perBoard.reduce((t, b) => t + (b.weekly[i]?.created || 0), 0),
+        done: perBoard.reduce((t, b) => t + (b.weekly[i]?.done || 0), 0),
+      }));
+      const assignee = new Map<string, number>();
+      for (const b of perBoard) for (const item of b.byAssignee) assignee.set(item.label, (assignee.get(item.label) || 0) + item.value);
+
+      return {
+        totalBoards: perBoard.length,
+        totals: sumTotals(perBoard.map((b) => b.totals)),
+        weekly,
+        byAssignee: Array.from(assignee.entries()).map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value),
+        boards: perBoard.map(({ weekly: _w, byAssignee: _a, ...rest }) => rest),
+      };
+    }),
+
     getGeneral: protectedProcedure.query(async ({ ctx }) => {
       const zeros = { totalBoards: 0, totalCards: 0, totalUsers: 0 };
       const isMaster = ctx.user.role === 'master_admin';

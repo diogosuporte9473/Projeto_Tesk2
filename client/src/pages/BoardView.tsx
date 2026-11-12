@@ -4,7 +4,7 @@ import { useRealtimeSync } from "@/_core/hooks/useRealtimeSync";
 import { trpc } from "@/lib/trpc";
 import TrelloDashboardLayout from "@/components/TrelloDashboardLayout";
 import { Button } from "@/components/ui/button";
-import { Plus, Loader2, MessageSquare, X, UserPlus, Users, Trash2, MoreHorizontal, Edit2, Archive, Settings2, AlignLeft, Tag, CheckSquare, Clock, LayoutGrid, Paperclip, History as HistoryIcon, Search, Sparkles, User as UserIcon, AlertCircle, CalendarClock, Columns3, Palette } from "lucide-react";
+import { Plus, Loader2, MessageSquare, X, UserPlus, Users, Trash2, MoreHorizontal, Edit2, Archive, Settings2, AlignLeft, Tag, CheckSquare, Clock, LayoutGrid, Paperclip, History as HistoryIcon, Search, Sparkles, User as UserIcon, AlertCircle, CalendarClock, Columns3, Palette, BarChart3 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useState, useRef, useEffect, useMemo } from "react";
 import { formatDistanceToNow } from "date-fns";
@@ -31,6 +31,7 @@ import {
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { DraggableCard } from "@/components/DraggableCard";
 import BoardThemeDialog from "@/components/BoardThemeDialog";
+import BoardDashboard from "@/components/BoardDashboard";
 import { themeIcon } from "@/lib/themeIcons";
 import { getBoardTheme, type BoardSettings } from "@shared/boardThemes";
 import { AIChatBox, Message } from "@/components/AIChatBox";
@@ -91,6 +92,7 @@ export default function BoardView() {
   const [showArchivedModal, setShowArchivedModal] = useState(false);
   const [showMirrorSettings, setShowMirrorSettings] = useState(false);
   const [showThemeDialog, setShowThemeDialog] = useState(false);
+  const [view, setView] = useState<"kanban" | "dashboard">("kanban");
   const [messages, setMessages] = useState<Message[]>([
     { role: "system", content: "You are a helpful assistant for the DStasks. You can help users organize their tasks, suggest project steps, and answer questions about their boards." }
   ]);
@@ -380,9 +382,31 @@ export default function BoardView() {
             </div>
           </div>
 
-          {/* Filtros */}
+          {/* Visualização + filtros */}
           {hasLists && (
             <div className="mt-3 flex flex-wrap items-center gap-2">
+              <div className="inline-flex h-8 items-center rounded-lg border border-input p-0.5" role="tablist" aria-label={isEnglish ? "View" : "Visualização"}>
+                {([
+                  { key: "kanban", label: "Kanban", icon: Columns3 },
+                  { key: "dashboard", label: isEnglish ? "Dashboard" : "Painel", icon: BarChart3 },
+                ] as const).map((option) => (
+                  <button
+                    key={option.key}
+                    type="button"
+                    role="tab"
+                    aria-selected={view === option.key}
+                    onClick={() => setView(option.key)}
+                    className={cn(
+                      "inline-flex h-full items-center gap-1.5 rounded-md px-2.5 text-[13px] font-medium transition-colors",
+                      view === option.key ? "bg-foreground/[0.09] text-foreground" : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    <option.icon className="h-3.5 w-3.5" />
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+              {view === "kanban" && (<>
               <div className="relative">
                 <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                 <input
@@ -421,12 +445,22 @@ export default function BoardView() {
                   <X className="h-3.5 w-3.5" /> {isEnglish ? "Clear" : "Limpar"}
                 </button>
               )}
+              </>)}
             </div>
           )}
         </header>
 
+        {/* Painel de indicadores do quadro */}
+        {view === "dashboard" && boardId && (
+          <div className="thin-scroll flex-1 overflow-y-auto px-4 py-5 lg:px-6">
+            <div className="mx-auto max-w-6xl">
+              <BoardDashboard boardId={boardId} />
+            </div>
+          </div>
+        )}
+
         {/* Colunas */}
-        <div className="thin-scroll flex-1 overflow-x-auto overflow-y-hidden px-4 py-4 lg:px-6">
+        <div className={cn("thin-scroll flex-1 overflow-x-auto overflow-y-hidden px-4 py-4 lg:px-6", view !== "kanban" && "hidden")}>
           <DndContext
             sensors={sensors}
             collisionDetection={closestCorners}
