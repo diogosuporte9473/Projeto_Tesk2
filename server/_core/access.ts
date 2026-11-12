@@ -110,6 +110,18 @@ export function guardedProcedure(guards: Record<string, ResourceKind>) {
 }
 
 /** Papéis que administram o próprio tenant. */
+/**
+ * Empresa (tenant) dona de um recurso. Linhas novas (listas, cartões,
+ * comentários, anexos) devem herdar a empresa do quadro em que estão — e não
+ * a de quem está logado: o master_admin atua em quadros de várias empresas.
+ */
+export async function tenantOf(kind: Exclude<ResourceKind, "user">, id: number): Promise<string> {
+  const boardId = await resolveBoardId(kind, id);
+  const board = await fetchRow("boards", "id, tenant_id", boardId);
+  if (!board?.tenant_id) deny();
+  return board.tenant_id;
+}
+
 export function isTenantAdmin(user: Pick<User, "role">): boolean {
   return user.role === "admin" || user.role === "master_admin";
 }

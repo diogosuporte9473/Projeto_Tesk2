@@ -463,3 +463,37 @@ describe("automations (Fase 4)", () => {
     expect(tables.notifications.map((n: any) => n.read)).toEqual([true, false]);
   });
 });
+
+describe("empresa do recurso (multi-tenant)", () => {
+  beforeEach(() => {
+    tables.tenants = [{ id: TENANT_A, name: "Empresa A" }, { id: TENANT_B, name: "Empresa B" }];
+    // Como em produção: o master_admin aponta para uma empresa que não existe mais.
+    tables.users.find((u) => u.id === 5).tenant_id = "cccccccc-0000-0000-0000-000000000003";
+  });
+
+  it("master_admin precisa escolher a empresa e o quadro nasce nela", async () => {
+    await expect(callerFor(5).boards.create({ name: "Sem empresa" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    const { id } = await callerFor(5).boards.create({ name: "Quadro do master", tenantId: TENANT_B, theme: "crm" });
+    expect(tables.boards.find((b) => b.id === id)).toMatchObject({ tenant_id: TENANT_B, theme: "crm" });
+    const created = tables.lists.filter((l) => l.board_id === id);
+    expect(created.length).toBeGreaterThan(1);
+    expect(created.every((l) => l.tenant_id === TENANT_B)).toBe(true);
+  });
+
+  it("usuário comum não cria quadro em outra empresa", async () => {
+    await expect(callerFor(1).boards.create({ name: "Invasão", tenantId: TENANT_B })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    const { id } = await callerFor(1).boards.create({ name: "Meu quadro" });
+    expect(tables.boards.find((b) => b.id === id).tenant_id).toBe(TENANT_A);
+  });
+
+  it("lista, cartão e comentário criados pelo master herdam a empresa do quadro", async () => {
+    await callerFor(5).lists.create({ boardId: 20, name: "Nova lista" });
+    expect(tables.lists.find((l) => l.name === "Nova lista").tenant_id).toBe(TENANT_B);
+
+    const { id } = await callerFor(5).cards.create({ listId: 200, title: "Cartão do master" });
+    expect(tables.cards.find((c) => c.id === id).tenant_id).toBe(TENANT_B);
+
+    await callerFor(5).cardDetails.addComment({ cardId: 2000, content: "ok" });
+    expect(tables.card_comments[0].tenant_id).toBe(TENANT_B);
+  });
+});
