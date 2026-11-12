@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/command";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
+  BarChart3,
   Check,
   ChevronsUpDown,
   Home,
@@ -241,6 +242,9 @@ export default function TrelloDashboardLayout({ children }: TrelloDashboardLayou
       <nav className={cn("thin-scroll flex-1 overflow-y-auto px-3 pb-3", compact && "px-2")}>
         <SideLink href="/" active={location === "/"} compact={compact} label={en ? "Home" : "Início"}>
           <Home className="h-4 w-4 flex-shrink-0" />
+        </SideLink>
+        <SideLink href="/dashboard" active={location === "/dashboard"} compact={compact} label={en ? "Dashboard" : "Painel"}>
+          <BarChart3 className="h-4 w-4 flex-shrink-0" />
         </SideLink>
 
         <div className={cn("mb-1 mt-5 flex items-center justify-between px-2", compact && "justify-center px-0")}>
@@ -456,6 +460,9 @@ export default function TrelloDashboardLayout({ children }: TrelloDashboardLayou
             </CommandItem>
             <CommandItem onSelect={() => go("/")}>
               <Home className="h-4 w-4" /> {en ? "Home" : "Início"}
+            </CommandItem>
+            <CommandItem onSelect={() => go("/dashboard")}>
+              <BarChart3 className="h-4 w-4" /> {en ? "Dashboard" : "Painel"}
             </CommandItem>
             <CommandItem onSelect={() => go("/settings")}>
               <Settings className="h-4 w-4" /> {t("layout.settings")}

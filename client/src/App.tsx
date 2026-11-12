@@ -12,6 +12,7 @@ import BoardView from "./pages/BoardView";
 import Admin from "./pages/Admin";
 import MasterDashboard from "./pages/MasterDashboard";
 import Onboarding from "./pages/Onboarding";
+import Dashboard from "./pages/Dashboard";
 
 function Router() {
   return (
@@ -19,6 +20,7 @@ function Router() {
       <Route path={"/"} component={Home} />
       <Route path={"/onboarding"} component={Onboarding} />
       <Route path={"/board/:id"} component={BoardView} />
+      <Route path={"/dashboard"} component={Dashboard} />
       <Route path={"/settings"} component={Settings} />
       <Route path={"/admin"} component={Admin} />
       <Route path={"/master"} component={MasterDashboard} />

@@ -315,3 +315,18 @@ describe("cardDetails.upsertCustomField (campos do tema)", () => {
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 });
+
+describe("stats (indicadores por quadro)", () => {
+  it("stats.board calcula com os cartões do quadro e nega quadro de outro tenant", async () => {
+    const own = await callerFor(1).stats.board({ boardId: 10 });
+    expect(own.totals.total).toBe(1);
+    expect(own.boardName).toBe("Quadro A");
+    await expect(callerFor(1).stats.board({ boardId: 20 })).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("stats.overview nunca inclui quadros de outro tenant", async () => {
+    const overview = await callerFor(1).stats.overview();
+    expect(overview.boards.map((b) => b.boardId)).not.toContain(20);
+    expect(overview.totals.total).toBe(overview.boards.reduce((t, b) => t + b.totals.total, 0));
+  });
+});
