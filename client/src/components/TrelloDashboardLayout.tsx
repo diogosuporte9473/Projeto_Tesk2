@@ -408,7 +408,7 @@ export default function TrelloDashboardLayout({ children }: TrelloDashboardLayou
   );
 
   return (
-    <div className="flex h-screen bg-background text-foreground">
+    <div className="flex h-screen h-[100dvh] bg-background text-foreground">
       {/* Barra lateral — desktop */}
       <aside
         className={cn(
