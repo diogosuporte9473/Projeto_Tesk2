@@ -1133,11 +1133,65 @@ export const appRouter = router({
         if (ctx.user.role !== 'master_admin') {
           throw new TRPCError({ code: "FORBIDDEN", message: "Apenas Master Admin pode deletar ambientes" });
         }
-        const db = await getDb();
-        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database connection failed" });
-        await db.delete(tenants).where(eq(tenants.id, input.id));
+        const { data: tenantRow } = await supabase.from("tenants").select("id, name").eq("id", input.id).maybeSingle();
+        if (!tenantRow) throw new TRPCError({ code: "NOT_FOUND", message: "Empresa não encontrada" });
+
+        // Uma empresa só é excluída vazia: nunca apagamos usuários, quadros e
+        // cartões de um cliente em cascata por um clique.
+        const [{ data: tenantUsers }, { data: tenantBoards }] = await Promise.all([
+          supabase.from("users").select("id").eq("tenant_id", input.id),
+          supabase.from("boards").select("id").eq("tenant_id", input.id),
+        ]);
+        const userCount = tenantUsers?.length ?? 0;
+        const boardCount = tenantBoards?.length ?? 0;
+        if (userCount > 0 || boardCount > 0) {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: `A empresa "${tenantRow.name}" ainda tem ${userCount} usuário(s) e ${boardCount} quadro(s). Remova-os antes de excluir a empresa.`,
+          });
+        }
+
+        // Vínculos que só existem por causa da empresa.
+        await supabase.from("user_tenants").delete().eq("tenant_id", input.id);
+        const { error } = await supabase.from("tenants").delete().eq("id", input.id);
+        if (error) {
+          console.error("[Tenant] Falha ao excluir empresa:", error.message);
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: `A empresa "${tenantRow.name}" ainda tem registros vinculados (histórico ou notificações) e não pôde ser excluída.`,
+          });
+        }
+
+        await createAuditLog({
+          userId: ctx.user.id,
+          tenantId: null,
+          action: 'delete',
+          entityType: 'board',
+          entityId: 0,
+          entityName: tenantRow.name,
+          details: `Empresa excluída: ${tenantRow.name} (${input.id})`
+        });
         return { success: true };
       }),
+
+    // Quantos usuários e quadros cada empresa tem (Painel Master).
+    tenantUsage: protectedProcedure.query(async ({ ctx }) => {
+      if (ctx.user.role !== 'master_admin') {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Acesso negado" });
+      }
+      const [{ data: userRows }, { data: boardRows }] = await Promise.all([
+        supabase.from("users").select("tenant_id"),
+        supabase.from("boards").select("tenant_id"),
+      ]);
+      const usage: Record<string, { users: number; boards: number }> = {};
+      const bump = (tenantId: string | null, key: "users" | "boards") => {
+        if (!tenantId) return;
+        (usage[tenantId] ||= { users: 0, boards: 0 })[key] += 1;
+      };
+      for (const row of userRows || []) bump(row.tenant_id, "users");
+      for (const row of boardRows || []) bump(row.tenant_id, "boards");
+      return usage;
+    }),
   }),
 
   // Lists routers

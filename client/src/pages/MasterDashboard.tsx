@@ -24,11 +24,14 @@ export default function MasterDashboard() {
     onError: (err) => toast.error(`Erro ao criar: ${err.message}`)
   });
 
+  const { data: usage } = trpc.branding.tenantUsage.useQuery();
   const deleteTenantMutation = trpc.branding.deleteTenant.useMutation({
     onSuccess: () => {
       utils.branding.listAllTenants.invalidate();
-      toast.success("Ambiente removido");
-    }
+      utils.branding.tenantUsage.invalidate();
+      toast.success("Empresa excluída");
+    },
+    onError: (err) => toast.error(err.message || "Não foi possível excluir a empresa"),
   });
 
   const [showNewForm, setShowNewForm] = useState(false);
@@ -120,14 +123,24 @@ export default function MasterDashboard() {
                       <Globe className="w-3 h-3" />
                       {t.slug}
                     </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {(usage as any)?.[t.id]?.users ?? 0} usuário(s) · {(usage as any)?.[t.id]?.boards ?? 0} quadro(s)
+                    </p>
                   </div>
                 </div>
                 <Button 
                   variant="ghost" 
                   size="icon" 
                   className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                  aria-label={`Excluir a empresa ${t.name}`}
+                  disabled={deleteTenantMutation.isPending}
                   onClick={() => {
-                    if(confirm('Tem certeza que deseja remover este ambiente?')) {
+                    const u = (usage as any)?.[t.id];
+                    if (u && (u.users > 0 || u.boards > 0)) {
+                      toast.error(`A empresa "${t.name}" ainda tem ${u.users} usuário(s) e ${u.boards} quadro(s). Remova-os antes de excluir a empresa.`);
+                      return;
+                    }
+                    if (confirm(`Excluir a empresa "${t.name}"? Isso não pode ser desfeito.`)) {
                       deleteTenantMutation.mutate({ id: t.id });
                     }
                   }}
