@@ -615,3 +615,39 @@ describe("admin.users — cadastro segregado por empresa", () => {
     expect(tables.board_members.find((m) => m.board_id === 10 && m.user_id === 1)?.role).toBe("editor");
   });
 });
+
+describe("branding.deleteTenant", () => {
+  const TENANT_C = "cccccccc-0000-4000-8000-000000000003";
+
+  beforeEach(() => {
+    tables.tenants = [
+      { id: TENANT_A, name: "Empresa A" },
+      { id: TENANT_B, name: "Empresa B" },
+      { id: TENANT_C, name: "Empresa Vazia" },
+    ];
+  });
+
+  it("recusa excluir empresa com usuários ou quadros e explica o motivo", async () => {
+    await expect(callerFor(5).branding.deleteTenant({ id: "bbbbbbbb-0000-4000-8000-000000000002" })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    tables.tenants.push({ id: "dddddddd-0000-4000-8000-000000000004", name: "Empresa D" });
+    tables.users.push({ id: 77, username: "d1", role: "user", tenant_id: "dddddddd-0000-4000-8000-000000000004" });
+    await expect(
+      callerFor(5).branding.deleteTenant({ id: "dddddddd-0000-4000-8000-000000000004" })
+    ).rejects.toMatchObject({ code: "CONFLICT", message: expect.stringContaining("1 usuário(s)") });
+    expect(tables.tenants.some((t) => t.name === "Empresa D")).toBe(true);
+    expect(tables.users.some((u) => u.id === 77)).toBe(true);
+  });
+
+  it("exclui empresa vazia e só o super administrador pode", async () => {
+    await expect(callerFor(2).branding.deleteTenant({ id: TENANT_C })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(callerFor(2).branding.tenantUsage()).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await callerFor(5).branding.deleteTenant({ id: TENANT_C });
+    expect(tables.tenants.some((t) => t.id === TENANT_C)).toBe(false);
+  });
+
+  it("tenantUsage conta usuários e quadros por empresa", async () => {
+    const usage = await callerFor(5).branding.tenantUsage();
+    expect(usage[TENANT_B]).toEqual({ users: 2, boards: 1 });
+    expect(usage[TENANT_C]).toBeUndefined();
+  });
+});
