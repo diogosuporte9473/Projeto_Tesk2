@@ -41,16 +41,9 @@ const trpcClient = trpc.createClient({
     httpBatchLink({
       url: "/api/trpc",
       transformer: superjson,
-      async headers() {
-        // Busca a sessão ativa do Supabase no LocalStorage
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.access_token) {
-          return {
-            Authorization: `Bearer ${session.access_token}`,
-          };
-        }
-        return {};
-      },
+      // A sessão do app é o cookie definido pelo servidor no login. Não lemos
+      // a sessão do Supabase aqui: essa leitura disputa uma trava entre abas
+      // do navegador e, quando a trava fica presa, TODAS as chamadas travam.
       async fetch(input, init) {
         const response = await globalThis.fetch(input, {
           ...(init ?? {}),

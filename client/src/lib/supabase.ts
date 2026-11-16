@@ -24,8 +24,11 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     heartbeatIntervalMs: 15000,
     timeout: 30000,
   },
+  // O cliente só é usado para tempo real; o login é feito pelo servidor.
+  // Sem sessão persistida não há renovação automática nem trava entre abas.
   auth: {
-    persistSession: true,
-    autoRefreshToken: true,
+    persistSession: false,
+    autoRefreshToken: false,
+    detectSessionInUrl: false,
   }
 });
