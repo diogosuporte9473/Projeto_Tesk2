@@ -73,6 +73,14 @@ function assertPasswordNotObvious(password: string, username: string) {
   }
 }
 
+/** Bloqueia (ou libera) o login de uma conta no Supabase Auth. */
+async function setAuthBan(authId: string, banned: boolean) {
+  const { error } = await supabase.auth.admin.updateUserById(authId, {
+    ban_duration: banned ? "876000h" : "none",
+  } as any);
+  if (error) console.error("[Admin] Falha ao alterar o bloqueio de login:", error.message);
+}
+
 /**
  * Um quadro só recebe como membro quem é da mesma empresa do quadro.
  */
@@ -524,6 +532,9 @@ export const appRouter = router({
           if (!user) {
             throw new TRPCError({ code: "UNAUTHORIZED", message: "Usuário ou senha inválidos" });
           }
+          if ((user as any).disabled_at) {
+            throw new TRPCError({ code: "UNAUTHORIZED", message: "Conta desativada. Fale com o administrador." });
+          }
 
           const valid = await bcrypt.compare(input.password, user.password);
           if (!valid) {
@@ -553,6 +564,9 @@ export const appRouter = router({
         const user = await getUserByUsername(input.username);
         if (!user) {
           throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "User found in Auth but not in Database" });
+        }
+        if ((user as any).disabled_at) {
+          throw new TRPCError({ code: "UNAUTHORIZED", message: "Conta desativada. Fale com o administrador." });
         }
 
         const sessionToken = authData.session?.access_token;
@@ -3344,7 +3358,7 @@ export const appRouter = router({
         const isMaster = ctx.user.role === 'master_admin';
         if (!isMaster && !ctx.user.tenantId) return [];
 
-        let query = supabase.from("users").select("id, username, name, role, tenant_id, created_at");
+        let query = supabase.from("users").select("*");
         if (!isMaster) query = query.eq("tenant_id", ctx.user.tenantId);
         const { data, error } = await query.order("name");
         if (error) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: error.message });
@@ -3365,6 +3379,7 @@ export const appRouter = router({
             tenantId: (u.tenant_id ?? null) as string | null,
             tenantName: (u.tenant_id ? tenantNames.get(u.tenant_id) ?? null : null) as string | null,
             createdAt: (u.created_at ?? null) as string | null,
+            disabledAt: (u.disabled_at ?? null) as string | null,
           }));
       }),
       create: protectedProcedure
@@ -3460,6 +3475,8 @@ export const appRouter = router({
           name: z.string().trim().max(255).optional(),
           role: z.enum(['user', 'admin']).optional(),
           password: userPasswordSchema.optional(),
+          // false desativa a conta (mantém o histórico); true reativa.
+          active: z.boolean().optional(),
         }))
         .mutation(async ({ ctx, input }) => {
           const isSelf = ctx.user.id === input.id;
@@ -3503,10 +3520,19 @@ export const appRouter = router({
             changes.push("senha");
           }
 
+          if (input.active !== undefined && isTenantAdmin(ctx.user) && !isSelf) {
+            updateData.disabled_at = input.active ? null : new Date().toISOString();
+            changes.push(input.active ? "conta reativada" : "conta desativada");
+          }
+
           if (Object.keys(updateData).length === 0) return { success: true };
 
           const { error } = await supabase.from("users").update(updateData).eq("id", input.id);
           if (error) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: error.message });
+
+          if ("disabled_at" in updateData && target.auth_id) {
+            await setAuthBan(target.auth_id, !input.active);
+          }
 
           if (updateData.role) {
             await supabase.from("user_tenants")
@@ -3545,26 +3571,57 @@ export const appRouter = router({
             throw new TRPCError({ code: 'FORBIDDEN', message: 'Você não tem permissão para remover este usuário' });
           }
 
+          const label = target.username || `Usuário ${input.id}`;
+
+          // Com histórico (auditoria, cartões, comentários) o banco recusa a
+          // exclusão. Nesse caso a conta é desativada e o histórico fica.
+          const { data: links } = await supabase.from("user_tenants").select("*").eq("user_id", input.id);
+          await supabase.from("user_tenants").delete().eq("user_id", input.id);
+          const { error } = await supabase.from("users").delete().eq("id", input.id);
+
+          if (!error) {
+            if (target.auth_id) {
+              const { error: authError } = await supabase.auth.admin.deleteUser(target.auth_id);
+              if (authError) console.error("[Admin] Falha ao remover a conta de login:", authError.message);
+            }
+            await createAuditLog({
+              userId: ctx.user.id,
+              tenantId: target.tenant_id ?? ctx.tenantId,
+              action: 'delete',
+              entityType: 'user',
+              entityId: input.id,
+              entityName: label,
+              details: `Usuário removido: ${label}`
+            });
+            return { success: true, mode: 'deleted' as const };
+          }
+
+          if (links && links.length > 0) {
+            await supabase.from("user_tenants").insert(links);
+          }
+          const { error: offError } = await supabase
+            .from("users")
+            .update({ disabled_at: new Date().toISOString() })
+            .eq("id", input.id);
+          if (offError) {
+            console.error("[Admin] Falha ao desativar usuário:", offError.message, "| exclusão:", error.message);
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: 'Este usuário tem histórico e não pode ser excluído; a desativação também falhou. Verifique se a migração 0012 foi aplicada.',
+            });
+          }
+          if (target.auth_id) await setAuthBan(target.auth_id, true);
+
           await createAuditLog({
             userId: ctx.user.id,
             tenantId: target.tenant_id ?? ctx.tenantId,
-            action: 'delete',
+            action: 'update',
             entityType: 'user',
             entityId: input.id,
-            entityName: target.username || `Usuário ${input.id}`,
-            details: `Usuário removido: ${target.username || input.id}`
+            entityName: label,
+            details: `Usuário desativado (possui histórico, não pode ser excluído): ${label}`
           });
-
-          await supabase.from("user_tenants").delete().eq("user_id", input.id);
-          const { error } = await supabase.from("users").delete().eq("id", input.id);
-          if (error) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: error.message });
-
-          // Encerra também a conta de login, para o acesso não sobreviver à remoção.
-          if (target.auth_id) {
-            const { error: authError } = await supabase.auth.admin.deleteUser(target.auth_id);
-            if (authError) console.error("[Admin] Falha ao remover a conta de login:", authError.message);
-          }
-          return { success: true };
+          return { success: true, mode: 'deactivated' as const };
         }),
     }),
     boards: router({

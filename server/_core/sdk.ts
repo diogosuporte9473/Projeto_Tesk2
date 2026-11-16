@@ -71,6 +71,7 @@ class SDKServer {
         // 2.1 Busca o usuário no nosso banco pelo AuthID (UUID)
         const userByAuthId = await db.getUserByAuthId(sbUser.id);
         if (userByAuthId) {
+          assertActive(userByAuthId);
           return userByAuthId;
         }
 
@@ -100,6 +101,7 @@ class SDKServer {
             break;
           }
           console.log(`[Auth] Legacy user ${user.id} linked to Supabase Auth`);
+          assertActive(user);
           return { ...user, authId: sbUser.id };
         }
       }
@@ -128,6 +130,7 @@ class SDKServer {
             ? await db.getUserById(Number(authId))
             : await db.getUserByAuthId(authId);
           if (user) {
+            assertActive(user);
             console.log(`[Auth] Manual JWT fallback success for AuthID: ${authId}`);
             return user;
           }
@@ -138,6 +141,13 @@ class SDKServer {
     }
 
     throw ForbiddenError("Invalid session");
+  }
+}
+
+/** Conta desativada não mantém sessão, mesmo com token ainda válido. */
+function assertActive(user: any) {
+  if (user?.disabled_at || user?.disabledAt) {
+    throw ForbiddenError("Account disabled");
   }
 }
 

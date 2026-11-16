@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Building2, Edit2, Loader2, Plus, Shield, ShieldCheck, Trash2, UserCheck } from "lucide-react";
+import { Building2, Edit2, Loader2, Plus, RotateCcw, Shield, ShieldCheck, Trash2, UserCheck } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -113,13 +113,27 @@ export default function UserManagement() {
   };
 
   const handleDelete = async (u: any) => {
-    if (!confirm(`Remover o usuário ${u.username}? O acesso dele é encerrado e isso não pode ser desfeito.`)) return;
+    if (!confirm(`Remover o usuário ${u.username}? O acesso dele é encerrado. Se ele tiver histórico no app, a conta é desativada em vez de excluída.`)) return;
     try {
-      await deleteUser.mutateAsync({ id: u.id });
-      toast.success("Usuário removido");
+      const result = await deleteUser.mutateAsync({ id: u.id });
+      if ((result as any)?.mode === "deactivated") {
+        toast.success("Usuário desativado: ele tem histórico, então o acesso foi bloqueado e os registros foram mantidos.", { duration: 8000 });
+      } else {
+        toast.success("Usuário removido");
+      }
       utils.admin.users.list.invalidate();
     } catch (error: any) {
       toast.error(error?.message || "Erro ao remover usuário");
+    }
+  };
+
+  const handleReactivate = async (u: any) => {
+    try {
+      await updateUser.mutateAsync({ id: u.id, active: true });
+      toast.success("Usuário reativado");
+      utils.admin.users.list.invalidate();
+    } catch (error: any) {
+      toast.error(error?.message || "Erro ao reativar usuário");
     }
   };
 
@@ -184,10 +198,15 @@ export default function UserManagement() {
                 const RoleIcon = u.role === "master_admin" ? ShieldCheck : u.role === "admin" ? Shield : UserCheck;
                 const created = u.createdAt ? new Date(u.createdAt) : null;
                 return (
-                  <tr key={u.id} className="transition-colors hover:bg-muted/50">
+                  <tr key={u.id} className={`transition-colors hover:bg-muted/50 ${u.disabledAt ? "opacity-60" : ""}`}>
                     <td className="px-4 py-3 font-medium text-foreground">
                       {u.name || "Sem nome"}
                       {isSelf && <span className="ml-2 text-xs font-normal text-muted-foreground">(você)</span>}
+                      {u.disabledAt && (
+                        <span className="ml-2 rounded-full border border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                          Desativado
+                        </span>
+                      )}
                       <span className="block break-all text-xs font-normal text-muted-foreground sm:hidden">{u.username}</span>
                       {isMaster && (
                         <span className="block text-xs font-normal text-muted-foreground md:hidden">
@@ -224,7 +243,12 @@ export default function UserManagement() {
                           <Edit2 className="h-4 w-4" />
                         </Button>
                       )}
-                      {canManage && !isSelf && (
+                      {canManage && !isSelf && u.disabledAt && (
+                        <Button variant="ghost" size="sm" aria-label={`Reativar ${u.username}`} title="Reativar" onClick={() => handleReactivate(u)}>
+                          <RotateCcw className="h-4 w-4" />
+                        </Button>
+                      )}
+                      {canManage && !isSelf && !u.disabledAt && (
                         <Button
                           variant="ghost"
                           size="sm"
