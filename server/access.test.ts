@@ -56,6 +56,10 @@ const { tables, fakeSupabase, dataClientSignIn, authClientSignIn, createAuthClie
     maybeSingle() { return Promise.resolve({ data: this.run()[0] ?? null, error: null }); }
     single() { return this.maybeSingle(); }
     then(resolve: any, reject: any) {
+      // Simula a chave estrangeira do histórico (audit_logs) barrando a exclusão.
+      if (this.op === "delete" && this.table === "users" && authAdmin.blockUserDelete) {
+        return Promise.resolve({ data: null, error: { message: "violates foreign key constraint" } }).then(resolve, reject);
+      }
       const data = this.run();
       return Promise.resolve({ data, error: null, count: data.length }).then(resolve, reject);
     }
@@ -67,6 +71,7 @@ const { tables, fakeSupabase, dataClientSignIn, authClientSignIn, createAuthClie
   const authAdmin = {
     accounts: [] as Array<{ id: string; email: string; password: string; user_metadata: any }>,
     failInsert: false,
+    blockUserDelete: false,
     createUser: async ({ email, password, user_metadata }: any) => {
       if (authAdmin.accounts.some((a) => a.email === email)) {
         return { data: { user: null }, error: { message: "User already registered" } };
@@ -114,6 +119,7 @@ const TENANT_B = "bbbbbbbb-0000-0000-0000-000000000002";
 function seed() {
   for (const key of Object.keys(tables)) delete tables[key];
   authAdmin.accounts = [];
+  authAdmin.blockUserDelete = false;
   tables.users = [
     { id: 1, username: "alice", role: "user", tenant_id: TENANT_A },
     { id: 2, username: "admin-a", role: "admin", tenant_id: TENANT_A },
@@ -649,5 +655,51 @@ describe("branding.deleteTenant", () => {
     const usage = await callerFor(5).branding.tenantUsage();
     expect(usage[TENANT_B]).toEqual({ users: 2, boards: 1 });
     expect(usage[TENANT_C]).toBeUndefined();
+  });
+});
+
+describe("admin.users — desativação", () => {
+  const SENHA = "frase longa de teste";
+
+  beforeEach(() => {
+    tables.tenants = [{ id: TENANT_A, name: "Empresa A" }, { id: TENANT_B, name: "Empresa B" }];
+  });
+
+  it("usuário com histórico é desativado em vez de excluído, e pode ser reativado", async () => {
+    const { id } = await callerFor(2).admin.users.create({ username: "hist@a.com", password: SENHA });
+    authAdmin.blockUserDelete = true;
+
+    const result = await callerFor(2).admin.users.delete({ id });
+    expect(result.mode).toBe("deactivated");
+    const row = tables.users.find((u) => u.id === id);
+    expect(row.disabled_at).toBeTruthy();
+    expect(tables.user_tenants.some((t) => t.user_id === id)).toBe(true);
+    expect((authAdmin.accounts[0] as any).ban_duration).toBe("876000h");
+
+    const list = await callerFor(2).admin.users.list();
+    expect(list.find((u) => u.id === id)?.disabledAt).toBeTruthy();
+
+    await callerFor(2).admin.users.update({ id, active: true });
+    expect(tables.users.find((u) => u.id === id).disabled_at).toBeNull();
+    expect((authAdmin.accounts[0] as any).ban_duration).toBe("none");
+  });
+
+  it("usuário sem histórico continua sendo excluído", async () => {
+    const { id } = await callerFor(2).admin.users.create({ username: "novo2@a.com", password: SENHA });
+    const result = await callerFor(2).admin.users.delete({ id });
+    expect(result.mode).toBe("deleted");
+    expect(tables.users.some((u) => u.id === id)).toBe(false);
+  });
+
+  it("ninguém desativa a si mesmo nem usuário de outra empresa", async () => {
+    await callerFor(2).admin.users.update({ id: 2, active: false });
+    expect(tables.users.find((u) => u.id === 2).disabled_at ?? null).toBeNull();
+    await expect(callerFor(2).admin.users.update({ id: 3, active: false })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(callerFor(1).admin.users.update({ id: 2, active: false })).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("conta desativada não faz login", async () => {
+    tables.users.find((u) => u.id === 1).disabled_at = new Date().toISOString();
+    await expect(callerFor(1).auth.login({ username: "alice", password: "segredo" })).rejects.toMatchObject({ code: "UNAUTHORIZED" });
   });
 });
