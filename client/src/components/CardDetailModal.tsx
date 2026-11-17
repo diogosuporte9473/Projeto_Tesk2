@@ -41,6 +41,7 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/contexts/LanguageContext";
 import SegmentFields from "./SegmentFields";
+import { MentionTextarea, MentionText, mentionIdsIn, type MentionUser } from "./MentionInput";
 
 interface CardDetailModalProps {
   isOpen: boolean;
@@ -190,6 +191,8 @@ export default function CardDetailModal({
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState(cardTitle);
   const [newComment, setNewComment] = useState("");
+  // Pessoas escolhidas com "@" no comentário em edição.
+  const [mentioned, setMentioned] = useState<MentionUser[]>([]);
   const [isMaximized, setIsMaximized] = useState(false);
   const [newLabel, setNewLabel] = useState("");
   const [newLabelColor, setNewLabelColor] = useState("#4b4897");
@@ -475,8 +478,10 @@ export default function CardDetailModal({
   const handleAddComment = async () => {
     if (!newComment.trim()) return;
     try {
-      await addCommentMutation.mutateAsync({ cardId, content: newComment });
+      const mentions = mentionIdsIn(newComment, mentioned);
+      await addCommentMutation.mutateAsync({ cardId, content: newComment, ...(mentions.length ? { mentions } : {}) });
       setNewComment("");
+      setMentioned([]);
       await utils.cardDetails.getComments.invalidate({ cardId });
       toast.success("Comentário adicionado");
     } catch (error) {
@@ -1677,10 +1682,13 @@ export default function CardDetailModal({
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 space-y-4">
-                      <textarea
+                      <MentionTextarea
                         value={newComment}
-                        onChange={(e) => setNewComment(e.target.value)}
-                        placeholder="Escreva um comentário ou anote algo importante..."
+                        onChange={setNewComment}
+                        users={((allUsers as any[]) || []) as MentionUser[]}
+                        excludeId={currentUser?.id}
+                        onPick={(user) => setMentioned((list) => (list.some((u) => u.id === user.id) ? list : [...list, user]))}
+                        placeholder="Escreva um comentário… Use @ para mencionar alguém."
                         className="w-full bg-[var(--surface-3)]/50 border border-[var(--surface-border)] rounded-2xl p-6 text-sm leading-relaxed text-foreground focus:border-accent/40 focus:ring-1 focus:ring-accent/20 transition-all outline-none resize-none min-h-[120px] shadow-inner"
                       />
                       <div className="flex justify-end">
@@ -1712,7 +1720,7 @@ export default function CardDetailModal({
                             </span>
                           </div>
                           <div className="bg-[var(--surface-3)]/80 p-6 rounded-3xl rounded-tl-none text-sm text-foreground border border-[var(--surface-border)]/40 shadow-sm leading-relaxed break-words relative ring-1 ring-foreground/5">
-                            {comment.content}
+                            <MentionText text={comment.content || ""} users={((allUsers as any[]) || []) as MentionUser[]} />
                           </div>
                           {(comment.user_id === currentUser?.id || currentUser?.role === 'admin') && (
                             <button 

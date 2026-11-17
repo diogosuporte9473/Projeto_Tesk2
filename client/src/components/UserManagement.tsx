@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Building2, Edit2, Loader2, Plus, RotateCcw, Shield, ShieldCheck, Trash2, UserCheck } from "lucide-react";
+import { Building2, Copy, Edit2, Loader2, Mail, Plus, RotateCcw, Shield, ShieldCheck, Trash2, UserCheck } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -37,6 +37,8 @@ export default function UserManagement() {
   const createUser = trpc.admin.users.create.useMutation();
   const updateUser = trpc.admin.users.update.useMutation();
   const deleteUser = trpc.admin.users.delete.useMutation();
+  const inviteUser = trpc.admin.users.invite.useMutation();
+  const sendAccessLink = trpc.admin.users.sendAccessLink.useMutation();
 
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
@@ -46,6 +48,10 @@ export default function UserManagement() {
   const [role, setRole] = useState<Role>("user");
   const [tenantId, setTenantId] = useState("");
   const [tenantFilter, setTenantFilter] = useState("");
+  // Convite por e-mail (padrão) ou senha inicial definida pelo administrador.
+  const [mode, setMode] = useState<"invite" | "password">("invite");
+  // Link exibido quando o e-mail não pôde ser enviado.
+  const [manualLink, setManualLink] = useState<{ email: string; link: string } | null>(null);
 
   const visibleUsers = useMemo(
     () => ((users as any[]) || []).filter((u) => !tenantFilter || u.tenantId === tenantFilter),
@@ -59,6 +65,7 @@ export default function UserManagement() {
     setPassword("");
     setRole("user");
     setTenantId(tenantFilter);
+    setMode("invite");
     setOpen(true);
   };
 
@@ -76,11 +83,15 @@ export default function UserManagement() {
   const editingMaster = editing?.role === "master_admin";
   const roleLocked = editingSelf || editingMaster;
   const passwordTooShort = password.length > 0 && password.length < PASSWORD_MIN;
-  const pending = createUser.isPending || updateUser.isPending;
+  const pending = createUser.isPending || updateUser.isPending || inviteUser.isPending;
+  const inviting = !editing && mode === "invite";
+  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(username.trim());
   const canSubmit =
     !pending &&
     !passwordTooShort &&
-    (editing ? true : username.trim().length >= 3 && password.length >= PASSWORD_MIN && (!isMaster || !!tenantId));
+    (editing
+      ? true
+      : (!isMaster || !!tenantId) && (inviting ? emailValid : username.trim().length >= 3 && password.length >= PASSWORD_MIN));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -94,6 +105,18 @@ export default function UserManagement() {
           password: password || undefined,
         });
         toast.success("Usuário atualizado");
+      } else if (inviting) {
+        const result = await inviteUser.mutateAsync({
+          email: username.trim(),
+          name: name.trim() || undefined,
+          role,
+          ...(isMaster ? { tenantId } : {}),
+        });
+        if (result.emailSent) {
+          toast.success(`Convite enviado para ${username.trim()}`);
+        } else if (result.link) {
+          setManualLink({ email: username.trim(), link: result.link });
+        }
       } else {
         await createUser.mutateAsync({
           username: username.trim(),
@@ -124,6 +147,29 @@ export default function UserManagement() {
       utils.admin.users.list.invalidate();
     } catch (error: any) {
       toast.error(error?.message || "Erro ao remover usuário");
+    }
+  };
+
+  const handleSendLink = async (u: any) => {
+    try {
+      const result = await sendAccessLink.mutateAsync({ id: u.id });
+      if (result.emailSent) {
+        toast.success(`Link de acesso enviado para ${u.username}`);
+      } else if (result.link) {
+        setManualLink({ email: u.username, link: result.link });
+      }
+    } catch (error: any) {
+      toast.error(error?.message || "Erro ao gerar o link de acesso");
+    }
+  };
+
+  const copyLink = async () => {
+    if (!manualLink) return;
+    try {
+      await navigator.clipboard.writeText(manualLink.link);
+      toast.success("Link copiado");
+    } catch {
+      toast.error("Não foi possível copiar; selecione o link e copie manualmente");
     }
   };
 
@@ -243,6 +289,18 @@ export default function UserManagement() {
                           <Edit2 className="h-4 w-4" />
                         </Button>
                       )}
+                      {canManage && !isSelf && !u.disabledAt && String(u.username).includes("@") && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          aria-label={`Enviar link de acesso para ${u.username}`}
+                          title="Enviar link de acesso (convite ou nova senha)"
+                          disabled={sendAccessLink.isPending}
+                          onClick={() => handleSendLink(u)}
+                        >
+                          <Mail className="h-4 w-4" />
+                        </Button>
+                      )}
                       {canManage && !isSelf && u.disabledAt && (
                         <Button variant="ghost" size="sm" aria-label={`Reativar ${u.username}`} title="Reativar" onClick={() => handleReactivate(u)}>
                           <RotateCcw className="h-4 w-4" />
@@ -308,6 +366,27 @@ export default function UserManagement() {
                 </select>
               </div>
             )}
+            {!editing && (
+              <div className="grid grid-cols-2 gap-1 rounded-lg border border-input p-1" role="radiogroup" aria-label="Como o usuário vai entrar">
+                {([
+                  { key: "invite", label: "Enviar convite" },
+                  { key: "password", label: "Definir senha" },
+                ] as const).map((option) => (
+                  <button
+                    key={option.key}
+                    type="button"
+                    role="radio"
+                    aria-checked={mode === option.key}
+                    onClick={() => setMode(option.key)}
+                    className={`h-9 rounded-md text-sm font-medium transition-colors ${
+                      mode === option.key ? "bg-foreground/[0.09] text-foreground" : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="space-y-1.5">
               <label htmlFor="um-username" className="text-sm font-medium">Login (e-mail)</label>
               <input
@@ -334,6 +413,12 @@ export default function UserManagement() {
                 placeholder="Nome do usuário"
               />
             </div>
+            {inviting ? (
+              <p className="rounded-lg border border-border bg-muted/50 p-3 text-xs text-muted-foreground">
+                O usuário recebe um link por e-mail para criar a própria senha. Se o envio de e-mail não estiver configurado, o
+                link aparece aqui para você copiar e enviar.
+              </p>
+            ) : (
             <div className="space-y-1.5">
               <label htmlFor="um-password" className="text-sm font-medium">
                 {editing ? "Nova senha (deixe em branco para manter)" : "Senha inicial"}
@@ -352,6 +437,7 @@ export default function UserManagement() {
                 Mínimo de {PASSWORD_MIN} caracteres e sem conter o login. Uma frase longa é melhor que símbolos.
               </p>
             </div>
+            )}
             <div className="space-y-1.5">
               <label htmlFor="um-role" className="text-sm font-medium">Papel</label>
               {editingMaster ? (
@@ -383,10 +469,37 @@ export default function UserManagement() {
                 Cancelar
               </Button>
               <Button type="submit" disabled={!canSubmit}>
-                {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Salvar"}
+                {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : inviting ? "Convidar" : "Salvar"}
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!manualLink} onOpenChange={(value) => !value && setManualLink(null)}>
+        <DialogContent className="border-border bg-background">
+          <DialogHeader>
+            <DialogTitle>Link de acesso gerado</DialogTitle>
+            <DialogDescription>
+              O e-mail não foi enviado (envio não configurado ou falhou). Envie este link a {manualLink?.email} por um canal
+              seguro. Ele dá acesso à conta, vale por tempo limitado e só pode ser usado uma vez.
+            </DialogDescription>
+          </DialogHeader>
+          <textarea
+            readOnly
+            value={manualLink?.link || ""}
+            onFocus={(e) => e.currentTarget.select()}
+            className="h-28 w-full resize-none rounded-lg border border-input bg-transparent p-3 font-mono text-xs break-all outline-none"
+            aria-label="Link de acesso"
+          />
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={() => setManualLink(null)}>
+              Fechar
+            </Button>
+            <Button type="button" onClick={copyLink} className="gap-2">
+              <Copy className="h-4 w-4" /> Copiar link
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

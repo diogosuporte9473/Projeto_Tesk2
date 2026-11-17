@@ -91,6 +91,17 @@ export function DraggableCard({
     });
   }, [initialCompletedCount, initialChecklistCount]);
 
+  // Link direto (?card=ID), usado pelos avisos e e-mails: abre o cartão.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("card") === String(id)) {
+      setIsModalOpen(true);
+      params.delete("card");
+      const query = params.toString();
+      window.history.replaceState(null, "", `${window.location.pathname}${query ? `?${query}` : ""}`);
+    }
+  }, [id]);
+
   const handleLocalChecklistChange = (completed: number, total: number) => {
     setCounts({ completed, total });
     onChecklistChange?.(completed, total);

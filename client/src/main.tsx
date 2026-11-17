@@ -36,6 +36,22 @@ queryClient.getMutationCache().subscribe((event: any) => {
 
 import { supabase } from "@/lib/supabase";
 
+// Links de convite e de redefinição podem cair em qualquer página do app
+// (depende da configuração de endereços do Supabase): leva para /acesso.
+if (typeof window !== "undefined" && window.location.pathname !== "/acesso") {
+  const hash = window.location.hash;
+  if (/(^#|&)(access_token|error_code)=/.test(hash)) {
+    window.history.replaceState(null, "", `/acesso${hash}`);
+  }
+}
+
+// App instalável (PWA): o service worker só é registrado no build publicado.
+if (typeof window !== "undefined" && "serviceWorker" in navigator && import.meta.env.PROD) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch((err) => console.warn("[PWA] Service worker não registrado:", err));
+  });
+}
+
 const trpcClient = trpc.createClient({
   links: [
     httpBatchLink({

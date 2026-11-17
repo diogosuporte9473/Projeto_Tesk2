@@ -53,6 +53,9 @@ import { BOARD_THEME_KEYS, BOARD_SETTING_LIST_KEYS, DEFAULT_THEME, getBoardTheme
 import { computeBoardMetrics, sumTotals, type MetricCard, type MetricList } from "../shared/boardMetrics.js";
 import { TRIGGER_TYPES, CONDITION_OPS, NOTIFY_TARGETS } from "../shared/automationRules.js";
 import { runAutomations, runScheduledAutomations } from "./automations.js";
+import { appUrl, emailConfigured, isDeliverableEmail, renderEmail, sendEmail } from "./mailer.js";
+import { excerpt, notifyUsers } from "./notify.js";
+import { randomBytes } from "crypto";
 
 /**
  * Política de senha para contas criadas ou redefinidas por administradores:
@@ -79,6 +82,152 @@ async function setAuthBan(authId: string, banned: boolean) {
     ban_duration: banned ? "876000h" : "none",
   } as any);
   if (error) console.error("[Admin] Falha ao alterar o bloqueio de login:", error.message);
+}
+
+/** Escapa curingas do ILIKE (% e _), para comparar e-mails sem diferenciar maiúsculas. */
+function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/g, (m) => `\\${m}`);
+}
+
+/** Limite simples de tentativas (por instância do servidor). */
+const attemptLog = new Map<string, number[]>();
+function allowAttempt(key: string, max: number, windowMs: number): boolean {
+  const now = Date.now();
+  const recent = (attemptLog.get(key) || []).filter((t) => now - t < windowMs);
+  if (recent.length >= max) {
+    attemptLog.set(key, recent);
+    return false;
+  }
+  recent.push(now);
+  attemptLog.set(key, recent);
+  return true;
+}
+
+/**
+ * Empresa em que um novo usuário será criado. O super administrador escolhe;
+ * o administrador só cria na própria empresa.
+ */
+async function resolveNewUserTenant(user: { role: string; tenantId?: string | null }, requested?: string) {
+  if (!isTenantAdmin(user as any)) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Acesso negado" });
+  }
+  const isMaster = user.role === "master_admin";
+  if (!isMaster && requested && requested !== user.tenantId) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Você só pode cadastrar usuários na sua própria empresa" });
+  }
+  const targetTenantId = isMaster ? requested : user.tenantId;
+  if (!targetTenantId) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: isMaster ? "Escolha a empresa do novo usuário." : "Sua conta não está vinculada a uma empresa.",
+    });
+  }
+  const { data: tenantRow } = await supabase.from("tenants").select("id, name").eq("id", targetTenantId).maybeSingle();
+  if (!tenantRow) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "Empresa não encontrada." });
+  }
+  return tenantRow as { id: string; name: string };
+}
+
+/** Gera (sem enviar) um link de acesso do Supabase Auth: convite ou redefinição. */
+async function generateAccessLink(type: "invite" | "recovery", email: string, redirectTo: string, name?: string) {
+  const { data, error } = await supabase.auth.admin.generateLink({
+    type,
+    email,
+    options: { redirectTo, ...(type === "invite" ? { data: { name: name || email } } : {}) },
+  } as any);
+  const link = (data as any)?.properties?.action_link as string | undefined;
+  if (error || !link) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: `Não foi possível gerar o link de acesso: ${error?.message || "resposta vazia"}` });
+  }
+  return { link, authUserId: ((data as any)?.user?.id ?? null) as string | null };
+}
+
+/**
+ * Link de acesso para um usuário que já existe no app. Se a conta de login dele
+ * sumiu (ou nunca existiu), cria uma nova e vincula ao cadastro.
+ */
+async function accessLinkForUser(user: any, redirectTo: string): Promise<{ link: string; kind: "invite" | "recovery" }> {
+  const email = String(user.username).toLowerCase();
+  try {
+    const { link, authUserId } = await generateAccessLink("recovery", email, redirectTo);
+    if (authUserId && !user.auth_id) {
+      await supabase.from("users").update({ auth_id: authUserId }).eq("id", user.id).is("auth_id", null);
+    }
+    return { link, kind: "recovery" };
+  } catch {
+    const { link, authUserId } = await generateAccessLink("invite", email, redirectTo, user.name);
+    if (authUserId) await supabase.from("users").update({ auth_id: authUserId }).eq("id", user.id);
+    return { link, kind: "invite" };
+  }
+}
+
+/** Envia o link de convite ou de redefinição. Devolve false se o e-mail não saiu. */
+async function deliverAccessLink(
+  kind: "invite" | "recovery",
+  to: string,
+  link: string,
+  opts: { invitedBy?: string; companyName?: string } = {}
+): Promise<boolean> {
+  const content =
+    kind === "invite"
+      ? renderEmail({
+          title: "Você foi convidado para o DStasks",
+          lines: [
+            `${opts.invitedBy || "Um administrador"} convidou você para a equipe ${opts.companyName || ""} no DStasks.`.replace(/\s+no DStasks/, " no DStasks"),
+            "Clique no botão para criar sua senha e entrar. O link vale por tempo limitado e só pode ser usado uma vez.",
+          ],
+          actionLabel: "Criar minha senha",
+          actionUrl: link,
+          footer: "Se você não esperava este convite, ignore este e-mail.",
+        })
+      : renderEmail({
+          title: "Defina sua senha do DStasks",
+          lines: [
+            "Recebemos um pedido para definir uma nova senha para a sua conta no DStasks.",
+            "O link vale por tempo limitado e só pode ser usado uma vez.",
+          ],
+          actionLabel: "Definir nova senha",
+          actionUrl: link,
+          footer: "Se você não pediu isso, ignore este e-mail: sua senha atual continua valendo.",
+        });
+  return sendEmail({
+    to,
+    subject: kind === "invite" ? "Convite para o DStasks" : "Defina sua senha do DStasks",
+    html: content.html,
+    text: content.text,
+  });
+}
+
+/** Título, quadro e empresa de um cartão (para avisos). */
+async function cardContext(cardId: number) {
+  const { data: card } = await supabase.from("cards").select("id, title, list_id").eq("id", cardId).maybeSingle();
+  const { data: list } = card ? await supabase.from("lists").select("id, board_id").eq("id", card.list_id).maybeSingle() : { data: null as any };
+  return {
+    title: (card?.title as string) || `Cartão ${cardId}`,
+    boardId: (list?.board_id as number) ?? null,
+    tenantId: await tenantOf("card", cardId),
+  };
+}
+
+/** Avisa quem passou a ser responsável por um cartão. Nunca interrompe a ação principal. */
+async function notifyAssignment(actor: { id: number; name?: string | null; username?: string | null }, cardId: number, newAssignee: number | null | undefined, previous: number | null | undefined) {
+  if (!newAssignee || newAssignee === previous || newAssignee === actor.id) return;
+  try {
+    const card = await cardContext(cardId);
+    await notifyUsers({
+      userIds: [newAssignee],
+      tenantId: card.tenantId,
+      type: "card_assigned",
+      title: `${actor.name || actor.username || "Alguém"} atribuiu um cartão a você`,
+      message: card.title,
+      cardId,
+      boardId: card.boardId,
+      emailPref: "email_on_card_assigned",
+    });
+  } catch (err) {
+    console.error("[Notify] Falha ao avisar atribuição:", err);
+  }
 }
 
 /**
@@ -582,6 +731,100 @@ export const appRouter = router({
 
         return user;
       }),
+    // "Esqueci minha senha": resposta sempre igual, para não revelar quem tem conta.
+    requestPasswordReset: publicProcedure
+      .input(z.object({ email: z.string().trim().toLowerCase().email().max(255) }))
+      .mutation(async ({ ctx, input }) => {
+        const result = { ok: true, emailEnabled: emailConfigured() };
+        if (!emailConfigured()) return result;
+
+        const ip = String(ctx.req?.headers?.["x-forwarded-for"] || (ctx.req as any)?.ip || "").split(",")[0].trim();
+        if (!allowAttempt(`reset-ip:${ip}`, 5, 15 * 60_000) || !allowAttempt(`reset-email:${input.email}`, 1, 60_000)) {
+          return result;
+        }
+
+        const { data: user } = await supabase.from("users").select("*").ilike("username", escapeLike(input.email)).maybeSingle();
+        if (!user || user.disabled_at || !isDeliverableEmail(user.username)) return result;
+
+        try {
+          const { link, kind } = await accessLinkForUser(user, `${appUrl(ctx.req)}/acesso`);
+          await deliverAccessLink(kind === "invite" ? "recovery" : kind, user.username, link);
+        } catch (err) {
+          console.error("[Auth] Falha ao gerar redefinição de senha:", err);
+        }
+        return result;
+      }),
+
+    // Página /acesso: quem chegou por convite ou redefinição define a senha e já entra.
+    completeAccess: publicProcedure
+      .input(z.object({ accessToken: z.string().min(20).max(8192), password: userPasswordSchema }))
+      .mutation(async ({ ctx, input }) => {
+        const { data: got, error: tokenError } = await supabase.auth.getUser(input.accessToken);
+        const sbUser = got?.user;
+        if (tokenError || !sbUser?.email) {
+          throw new TRPCError({ code: "UNAUTHORIZED", message: "Link inválido ou expirado. Peça um novo link." });
+        }
+
+        let { data: user } = await supabase.from("users").select("*").eq("auth_id", sbUser.id).maybeSingle();
+        if (!user) {
+          // Cadastro antigo sem conta de login vinculada: vincula pelo e-mail.
+          const { data: legacy } = await supabase
+            .from("users")
+            .select("*")
+            .ilike("username", escapeLike(sbUser.email))
+            .is("auth_id", null)
+            .maybeSingle();
+          if (legacy) {
+            await supabase.from("users").update({ auth_id: sbUser.id }).eq("id", legacy.id).is("auth_id", null);
+            user = legacy;
+          }
+        }
+        if (!user) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Esta conta não está cadastrada no DStasks. Fale com o administrador." });
+        }
+        if (user.disabled_at) {
+          throw new TRPCError({ code: "UNAUTHORIZED", message: "Conta desativada. Fale com o administrador." });
+        }
+        assertPasswordNotObvious(input.password, user.username || "");
+
+        const { error: passwordError } = await supabase.auth.admin.updateUserById(sbUser.id, {
+          password: input.password,
+          email_confirm: true,
+        } as any);
+        if (passwordError) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: `Não foi possível definir a senha: ${passwordError.message}` });
+        }
+        await supabase
+          .from("users")
+          .update({ password: await bcrypt.hash(input.password, 10), last_signed_in: new Date().toISOString() })
+          .eq("id", user.id);
+
+        const { data: authData, error: signInError } = await createAuthClient().auth.signInWithPassword({
+          email: sbUser.email,
+          password: input.password,
+        });
+        const sessionToken = authData?.session?.access_token;
+        if (signInError || !sessionToken) {
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Senha definida, mas não foi possível entrar. Use a tela de entrada." });
+        }
+        const cookieOptions = getSessionCookieOptions(ctx.req);
+        ctx.res.cookie(COOKIE_NAME, sessionToken, {
+          ...cookieOptions,
+          maxAge: (authData.session?.expires_in || 3600) * 1000,
+        });
+
+        await createAuditLog({
+          userId: user.id,
+          tenantId: user.tenant_id ?? null,
+          action: "update",
+          entityType: "user",
+          entityId: user.id,
+          entityName: user.username,
+          details: "Senha definida pelo próprio usuário (convite ou redefinição)",
+        });
+        return { success: true };
+      }),
+
     register: publicProcedure
       .input(z.object({
         username: z.string().trim().min(3).max(255),
@@ -1396,6 +1639,10 @@ export const appRouter = router({
         if (input.description !== undefined) updateData.description = input.description;
         if (input.dueDate) updateData.due_date = input.dueDate.toISOString();
         if (input.assignedTo !== undefined) updateData.assigned_to = input.assignedTo;
+        const { data: before } = input.assignedTo !== undefined
+          ? await supabase.from("cards").select("assigned_to").eq("id", input.id).maybeSingle()
+          : { data: null as any };
+        const previousAssignee = (before?.assigned_to ?? null) as number | null;
 
         const { error } = await supabase
           .from("cards")
@@ -1407,6 +1654,9 @@ export const appRouter = router({
             code: "INTERNAL_SERVER_ERROR",
             message: `Erro ao atualizar cartão: ${error.message}`,
           });
+        }
+        if (input.assignedTo !== undefined) {
+          await notifyAssignment(ctx.user, input.id, input.assignedTo, previousAssignee);
         }
 
         // Registrar log de atualização
@@ -1487,50 +1737,22 @@ export const appRouter = router({
 
   // Settings routers
   settings: router({
+    // O envio de e-mail depende da configuração SMTP do servidor.
+    emailStatus: protectedProcedure.query(() => ({ configured: emailConfigured() })),
     getPreferences: protectedProcedure.query(async ({ ctx }) => {
-      const db = await getDb();
-      if (!db) {
-        return {
-          emailOnCardAssigned: true,
-          emailOnCardUpdated: true,
-          emailOnMirroredCard: true,
-          emailOnDueDate: true,
-        };
-      }
-
-      let prefs: Array<(typeof userPreferences.$inferSelect)> = [];
-      try {
-        prefs = await db
-          .select()
-          .from(userPreferences)
-          .where(eq(userPreferences.userId, ctx.user.id))
-          .limit(1);
-      } catch (err) {
-        // Em alguns ambientes (ex: pooler/tenant), o Postgres pode falhar.
-        // Preferimos fallback para não quebrar o app inteiro.
-        console.error("[Settings] getPreferences failed, using defaults:", err);
-        return {
-          emailOnCardAssigned: true,
-          emailOnCardUpdated: true,
-          emailOnMirroredCard: true,
-          emailOnDueDate: true,
-        };
-      }
-
-      if (prefs.length === 0) {
-        return {
-          emailOnCardAssigned: true,
-          emailOnCardUpdated: true,
-          emailOnMirroredCard: true,
-          emailOnDueDate: true,
-        };
-      }
-
+      const defaults = {
+        emailOnCardAssigned: true,
+        emailOnCardUpdated: true,
+        emailOnMirroredCard: true,
+        emailOnDueDate: true,
+      };
+      const { data, error } = await supabase.from("user_preferences").select("*").eq("user_id", ctx.user.id).maybeSingle();
+      if (error || !data) return defaults;
       return {
-        emailOnCardAssigned: prefs[0].emailOnCardAssigned,
-        emailOnCardUpdated: prefs[0].emailOnCardUpdated,
-        emailOnMirroredCard: prefs[0].emailOnMirroredCard,
-        emailOnDueDate: prefs[0].emailOnDueDate,
+        emailOnCardAssigned: data.email_on_card_assigned !== false,
+        emailOnCardUpdated: data.email_on_card_updated !== false,
+        emailOnMirroredCard: data.email_on_mirrored_card !== false,
+        emailOnDueDate: data.email_on_due_date !== false,
       };
     }),
     updatePreferences: protectedProcedure
@@ -1932,7 +2154,9 @@ export const appRouter = router({
 
     updateAssignedTo: guardedProcedure({ cardId: "card", userId: "user" })
       .input(z.object({ cardId: z.number(), userId: z.number().nullish() }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
+        const { data: before } = await supabase.from("cards").select("assigned_to").eq("id", input.cardId).maybeSingle();
+        const previousAssignee = (before?.assigned_to ?? null) as number | null;
         const { error } = await supabase
           .from("cards")
           .update({ assigned_to: input.userId, updated_at: new Date().toISOString() })
@@ -1960,6 +2184,7 @@ export const appRouter = router({
           console.error("[Mirror Sync] AssignedTo sync failed:", e);
         }
 
+        await notifyAssignment(ctx.user, input.cardId, input.userId, previousAssignee);
         return { success: true };
       }),
 
@@ -2063,15 +2288,18 @@ export const appRouter = router({
 
     getCardUsers: guardedProcedure({ cardId: "card" })
       .input(z.object({ cardId: z.number() }))
-      .query(async ({ ctx }) => {
-        // Retorna todos os usuários do mesmo tenant (exceto master_admin) para permitir atribuição no checklist
+      .query(async ({ input }) => {
+        // Usuários da empresa do quadro (exceto super administrador), para atribuir e mencionar.
+        const tenantId = await tenantOf("card", input.cardId);
         const { data, error } = await supabase
           .from("users")
-          .select("id, name, username, role")
-          .eq("tenant_id", ctx.tenantId)
+          .select("*")
+          .eq("tenant_id", tenantId)
           .neq("role", "master_admin");
         if (error) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: error.message });
-        return data;
+        return ((data || []) as any[])
+          .filter((u) => !u.disabled_at)
+          .map((u) => ({ id: u.id as number, name: u.name as string, username: u.username as string, role: u.role as string }));
       }),
 
     getMirroredInfo: guardedProcedure({ cardId: "card" })
@@ -3055,7 +3283,12 @@ export const appRouter = router({
         }));
       }),
     addComment: guardedProcedure({ cardId: "card" })
-      .input(z.object({ cardId: z.number(), content: z.string() }))
+      .input(z.object({
+        cardId: z.number(),
+        content: z.string(),
+        // Usuários mencionados com @ (só os da empresa do quadro são avisados).
+        mentions: z.array(z.number().int()).max(20).optional(),
+      }))
       .mutation(async ({ ctx, input }) => {
         const { data, error } = await supabase
           .from("card_comments")
@@ -3096,6 +3329,25 @@ export const appRouter = router({
           await supabase.from("cards").update({ updated_at: new Date().toISOString() }).eq("id", input.cardId);
         } catch (e) {
           console.error("[Mirror Sync] Comment sync failed:", e);
+        }
+
+        if (input.mentions && input.mentions.length > 0) {
+          try {
+            const card = await cardContext(input.cardId);
+            await notifyUsers({
+              userIds: input.mentions,
+              tenantId: card.tenantId,
+              type: "comment_mention",
+              title: `${ctx.user.name || ctx.user.username} mencionou você em "${excerpt(card.title, 80)}"`,
+              message: excerpt(input.content),
+              cardId: input.cardId,
+              boardId: card.boardId,
+              excludeUserId: ctx.user.id,
+              emailPref: "email_on_card_updated",
+            });
+          } catch (err) {
+            console.error("[Notify] Falha ao avisar menções:", err);
+          }
         }
 
         return { id: data.id };
@@ -3393,24 +3645,8 @@ export const appRouter = router({
           tenantId: z.string().min(1).max(64).optional(),
         }))
         .mutation(async ({ ctx, input }) => {
-          if (!isTenantAdmin(ctx.user)) {
-            throw new TRPCError({ code: 'FORBIDDEN', message: 'Acesso negado' });
-          }
-          const isMaster = ctx.user.role === 'master_admin';
-          if (!isMaster && input.tenantId && input.tenantId !== ctx.user.tenantId) {
-            throw new TRPCError({ code: 'FORBIDDEN', message: 'Você só pode cadastrar usuários na sua própria empresa' });
-          }
-          const targetTenantId = isMaster ? input.tenantId : ctx.user.tenantId;
-          if (!targetTenantId) {
-            throw new TRPCError({
-              code: 'BAD_REQUEST',
-              message: isMaster ? 'Escolha a empresa do novo usuário.' : 'Sua conta não está vinculada a uma empresa.',
-            });
-          }
-          const { data: tenantRow } = await supabase.from("tenants").select("id, name").eq("id", targetTenantId).maybeSingle();
-          if (!tenantRow) {
-            throw new TRPCError({ code: 'BAD_REQUEST', message: 'Empresa não encontrada.' });
-          }
+          const tenantRow = await resolveNewUserTenant(ctx.user, input.tenantId);
+          const targetTenantId = tenantRow.id;
 
           assertPasswordNotObvious(input.password, input.username);
 
@@ -3468,6 +3704,117 @@ export const appRouter = router({
           });
 
           return { id: data.id };
+        }),
+      // Convite por e-mail: o usuário cria a própria senha pelo link.
+      invite: protectedProcedure
+        .input(z.object({
+          email: z.string().trim().toLowerCase().email().max(255),
+          name: z.string().trim().max(255).optional(),
+          role: z.enum(['user', 'admin']).default('user'),
+          tenantId: z.string().min(1).max(64).optional(),
+        }))
+        .mutation(async ({ ctx, input }) => {
+          const tenantRow = await resolveNewUserTenant(ctx.user, input.tenantId);
+
+          const { data: existing } = await supabase.from("users").select("id").ilike("username", escapeLike(input.email)).maybeSingle();
+          if (existing) {
+            throw new TRPCError({ code: 'CONFLICT', message: 'Já existe um usuário com esse e-mail.' });
+          }
+
+          const redirectTo = `${appUrl(ctx.req)}/acesso`;
+          let access: { link: string; authUserId: string | null };
+          let createdAuth = false;
+          try {
+            access = await generateAccessLink("invite", input.email, redirectTo, input.name);
+            createdAuth = true;
+          } catch {
+            // Já existe uma conta de login com esse e-mail (sem cadastro no app).
+            access = await generateAccessLink("recovery", input.email, redirectTo);
+          }
+          if (!access.authUserId) {
+            throw new TRPCError({ code: 'BAD_REQUEST', message: 'Não foi possível criar a conta de login.' });
+          }
+
+          const { data, error } = await supabase.from("users").insert({
+            auth_id: access.authUserId,
+            username: input.email,
+            // Senha local aleatória e descartada: o acesso é definido pelo próprio usuário no link.
+            password: await bcrypt.hash(randomBytes(32).toString("hex"), 10),
+            name: input.name || input.email,
+            role: input.role,
+            tenant_id: tenantRow.id,
+            last_signed_in: new Date().toISOString(),
+          }).select("id").single();
+
+          if (error || !data) {
+            if (createdAuth) await supabase.auth.admin.deleteUser(access.authUserId).catch(() => undefined);
+            throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: error?.message || 'Falha ao gravar o usuário' });
+          }
+
+          await supabase.from("user_tenants").insert({
+            user_id: data.id,
+            tenant_id: tenantRow.id,
+            role: input.role === 'admin' ? 'admin' : 'member',
+          });
+
+          const emailSent = await deliverAccessLink("invite", input.email, access.link, {
+            invitedBy: ctx.user.name || ctx.user.username,
+            companyName: tenantRow.name,
+          });
+
+          await createAuditLog({
+            userId: ctx.user.id,
+            tenantId: tenantRow.id,
+            action: 'create',
+            entityType: 'user',
+            entityId: data.id,
+            entityName: input.email,
+            details: `Usuário convidado: ${input.email} — papel ${input.role}, empresa ${tenantRow.name}; convite ${emailSent ? 'enviado por e-mail' : 'gerado para envio manual'}`,
+          });
+
+          return { id: data.id as number, emailSent, link: emailSent ? null : access.link };
+        }),
+      // Reenvia convite ou manda link para definir nova senha.
+      sendAccessLink: guardedProcedure({ id: "user" })
+        .input(z.object({ id: z.number() }))
+        .mutation(async ({ ctx, input }) => {
+          if (!isTenantAdmin(ctx.user)) {
+            throw new TRPCError({ code: 'FORBIDDEN', message: 'Apenas administradores enviam links de acesso' });
+          }
+          if (ctx.user.id === input.id) {
+            throw new TRPCError({ code: 'BAD_REQUEST', message: 'Para a sua conta, use "Esqueci minha senha" na tela de entrada.' });
+          }
+          const { data: target } = await supabase.from("users").select("*").eq("id", input.id).maybeSingle();
+          if (!target) throw new TRPCError({ code: 'NOT_FOUND', message: 'Usuário não encontrado' });
+          if (target.role === 'master_admin' && ctx.user.role !== 'master_admin') {
+            throw new TRPCError({ code: 'FORBIDDEN', message: 'Você não tem permissão para este usuário' });
+          }
+          if (target.disabled_at) {
+            throw new TRPCError({ code: 'BAD_REQUEST', message: 'Reative a conta antes de enviar um link de acesso.' });
+          }
+          if (!isDeliverableEmail(target.username)) {
+            throw new TRPCError({ code: 'BAD_REQUEST', message: 'O login deste usuário não é um e-mail válido.' });
+          }
+
+          const { link, kind } = await accessLinkForUser(target, `${appUrl(ctx.req)}/acesso`);
+          const { data: tenantRow } = target.tenant_id
+            ? await supabase.from("tenants").select("id, name").eq("id", target.tenant_id).maybeSingle()
+            : { data: null as any };
+          const emailSent = await deliverAccessLink(kind, target.username, link, {
+            invitedBy: ctx.user.name || ctx.user.username,
+            companyName: tenantRow?.name,
+          });
+
+          await createAuditLog({
+            userId: ctx.user.id,
+            tenantId: target.tenant_id ?? ctx.tenantId,
+            action: 'update',
+            entityType: 'user',
+            entityId: input.id,
+            entityName: target.username,
+            details: `Link de acesso ${emailSent ? 'enviado por e-mail' : 'gerado para envio manual'}`,
+          });
+          return { emailSent, link: emailSent ? null : link };
         }),
       update: guardedProcedure({ id: "user" })
         .input(z.object({

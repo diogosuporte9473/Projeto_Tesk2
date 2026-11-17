@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
  * Testes de autorização (isolamento por tenant).
@@ -21,6 +21,12 @@ const { tables, fakeSupabase, dataClientSignIn, authClientSignIn, createAuthClie
     eq(col: string, val: any) { this.filters.push((r) => r[col] === val); return this; }
     is(col: string, val: any) { this.filters.push((r) => (r[col] ?? null) === val); return this; }
     in(col: string, vals: any[]) { this.filters.push((r) => vals.includes(r[col])); return this; }
+    neq(col: string, val: any) { this.filters.push((r) => r[col] !== val); return this; }
+    ilike(col: string, pattern: string) {
+      const wanted = String(pattern).replace(/\\([\\%_])/g, "$1").toLowerCase();
+      this.filters.push((r) => String(r[col] ?? "").toLowerCase() === wanted);
+      return this;
+    }
     or() { this.filters.push(() => false); return this; }
     delete() { this.op = "delete"; return this; }
     update(patch: any) { this.op = "update"; this.patch = patch; return this; }
@@ -84,6 +90,20 @@ const { tables, fakeSupabase, dataClientSignIn, authClientSignIn, createAuthClie
       authAdmin.accounts = authAdmin.accounts.filter((a) => a.id !== id);
       return { data: {}, error: null };
     },
+    tokens: new Map<string, string>(),
+    generateLink: async ({ type, email }: any) => {
+      let account = authAdmin.accounts.find((a) => a.email === email);
+      if (type === "invite") {
+        if (account) return { data: { user: null, properties: null }, error: { message: "already been registered" } };
+        account = { id: `auth-${authAdmin.accounts.length + 1}`, email, password: "", user_metadata: {} };
+        authAdmin.accounts.push(account);
+      } else if (!account) {
+        return { data: { user: null, properties: null }, error: { message: "User not found" } };
+      }
+      const token = `token-${type}-${account.id}-${authAdmin.tokens.size + 1}-padding`;
+      authAdmin.tokens.set(token, account.id);
+      return { data: { user: account, properties: { action_link: `https://auth.test/verify?token=${token}` } }, error: null };
+    },
     updateUserById: async (id: string, patch: any) => {
       const account = authAdmin.accounts.find((a) => a.id === id);
       if (account) Object.assign(account, patch);
@@ -93,7 +113,11 @@ const { tables, fakeSupabase, dataClientSignIn, authClientSignIn, createAuthClie
   const fakeSupabase = {
     from: (table: string) => new Query(table),
     auth: {
-      getUser: async () => ({ data: { user: null }, error: null }),
+      getUser: async (token?: string) => {
+        const id = token ? authAdmin.tokens.get(token) : undefined;
+        const account = id ? authAdmin.accounts.find((a) => a.id === id) : undefined;
+        return account ? { data: { user: { id: account.id, email: account.email } }, error: null } : { data: { user: null }, error: { message: "invalid" } };
+      },
       signInWithPassword: dataClientSignIn,
       signUp: dataClientSignIn,
       admin: authAdmin,
@@ -110,6 +134,12 @@ const { tables, fakeSupabase, dataClientSignIn, authClientSignIn, createAuthClie
 
 vi.mock("./_core/supabase.js", () => ({ supabase: fakeSupabase, createAuthClient }));
 
+// E-mails enviados ficam guardados aqui em vez de sair por SMTP.
+const mail = vi.hoisted(() => ({ sent: [] as any[] }));
+vi.mock("nodemailer", () => ({
+  default: { createTransport: () => ({ sendMail: async (message: any) => { mail.sent.push(message); return {}; } }) },
+}));
+
 import { appRouter } from "./routers.js";
 import { assertAccess } from "./_core/access.js";
 
@@ -119,6 +149,8 @@ const TENANT_B = "bbbbbbbb-0000-0000-0000-000000000002";
 function seed() {
   for (const key of Object.keys(tables)) delete tables[key];
   authAdmin.accounts = [];
+  authAdmin.tokens.clear();
+  mail.sent = [];
   authAdmin.blockUserDelete = false;
   tables.users = [
     { id: 1, username: "alice", role: "user", tenant_id: TENANT_A },
@@ -701,5 +733,115 @@ describe("admin.users — desativação", () => {
   it("conta desativada não faz login", async () => {
     tables.users.find((u) => u.id === 1).disabled_at = new Date().toISOString();
     await expect(callerFor(1).auth.login({ username: "alice", password: "segredo" })).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+  });
+});
+
+describe("pacote de adoção", () => {
+  const SENHA = "frase longa de teste";
+  const SMTP = { SMTP_HOST: "smtp.test", SMTP_USER: "app@test.com", SMTP_PASS: "x", EMAIL_FROM: "app@test.com" };
+  const withSmtp = () => Object.assign(process.env, SMTP);
+
+  beforeEach(() => {
+    tables.tenants = [{ id: TENANT_A, name: "Empresa A" }, { id: TENANT_B, name: "Empresa B" }];
+    tables.users.push({ id: 11, username: "carla@a.com", name: "Carla", role: "user", tenant_id: TENANT_A });
+  });
+  afterEach(() => {
+    for (const key of Object.keys(SMTP)) delete process.env[key];
+  });
+
+  it("convite sem e-mail configurado devolve o link para envio manual", async () => {
+    const result = await callerFor(2).admin.users.invite({ email: "Nova@A.com", name: "Nova", role: "user" });
+    expect(result.emailSent).toBe(false);
+    expect(result.link).toContain("https://auth.test/verify");
+    const row = tables.users.find((u) => u.id === result.id);
+    expect(row).toMatchObject({ username: "nova@a.com", tenant_id: TENANT_A, role: "user" });
+    expect(row.auth_id).toBe(authAdmin.accounts[0].id);
+    expect(mail.sent).toHaveLength(0);
+    expect(tables.audit_logs.some((l) => l.entity_id === result.id && /convidado/.test(l.details))).toBe(true);
+  });
+
+  it("convite com e-mail configurado envia e não expõe o link", async () => {
+    withSmtp();
+    const result = await callerFor(5).admin.users.invite({ email: "b2@b.com", role: "admin", tenantId: TENANT_B });
+    expect(result).toMatchObject({ emailSent: true, link: null });
+    expect(mail.sent).toHaveLength(1);
+    expect(mail.sent[0]).toMatchObject({ to: "b2@b.com", subject: "Convite para o DStasks" });
+    expect(mail.sent[0].html).toContain("Empresa B");
+  });
+
+  it("convite respeita a segregação por empresa", async () => {
+    await expect(callerFor(2).admin.users.invite({ email: "x@b.com", tenantId: TENANT_B })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(callerFor(1).admin.users.invite({ email: "y@a.com" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(callerFor(2).admin.users.invite({ email: "carla@a.com" })).rejects.toMatchObject({ code: "CONFLICT" });
+    expect(authAdmin.accounts).toHaveLength(0);
+  });
+
+  it("quem recebeu o convite define a senha e já entra", async () => {
+    const { id, link } = await callerFor(2).admin.users.invite({ email: "entra@a.com" });
+    const token = new URL(link!).searchParams.get("token")!;
+    const cookies: string[] = [];
+    const caller = appRouter.createCaller({
+      user: null,
+      tenantId: null,
+      req: { protocol: "https", headers: {} },
+      res: { cookie: (name: string) => cookies.push(name), clearCookie: () => {} },
+    } as any);
+
+    await expect(caller.auth.completeAccess({ accessToken: token, password: "curta" })).rejects.toBeTruthy();
+    await expect(caller.auth.completeAccess({ accessToken: "token-que-nao-existe-123456", password: SENHA })).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+
+    await caller.auth.completeAccess({ accessToken: token, password: SENHA });
+    expect(authAdmin.accounts[0].password).toBe(SENHA);
+    expect(tables.users.find((u) => u.id === id).password).not.toBe("");
+    expect(cookies).toHaveLength(1);
+
+    tables.users.find((u) => u.id === id).disabled_at = new Date().toISOString();
+    await expect(caller.auth.completeAccess({ accessToken: token, password: SENHA })).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+  });
+
+  it("esqueci minha senha: resposta igual para quem existe ou não", async () => {
+    const anon = appRouter.createCaller({ user: null, tenantId: null, req: { headers: {} }, res: { cookie: () => {} } } as any);
+    expect(await anon.auth.requestPasswordReset({ email: "carla@a.com" })).toEqual({ ok: true, emailEnabled: false });
+    expect(mail.sent).toHaveLength(0);
+
+    withSmtp();
+    authAdmin.accounts.push({ id: "auth-carla", email: "carla@a.com", password: "antiga", user_metadata: {} });
+    tables.users.find((u) => u.id === 11).auth_id = "auth-carla";
+    expect(await anon.auth.requestPasswordReset({ email: "CARLA@a.com" })).toEqual({ ok: true, emailEnabled: true });
+    expect(await anon.auth.requestPasswordReset({ email: "ninguem@a.com" })).toEqual({ ok: true, emailEnabled: true });
+    expect(mail.sent.map((m) => m.to)).toEqual(["carla@a.com"]);
+  });
+
+  it("menção avisa só quem é da empresa do quadro e respeita a preferência de e-mail", async () => {
+    withSmtp();
+    await callerFor(1).cardDetails.addComment({ cardId: 1000, content: "@Carla e @bob vejam", mentions: [11, 3, 1] });
+    const notes = tables.notifications || [];
+    expect(notes.map((n) => n.user_id)).toEqual([11]);
+    expect(notes[0]).toMatchObject({ type: "comment_mention", related_card_id: 1000, related_board_id: 10, tenant_id: TENANT_A });
+    expect(mail.sent.map((m) => m.to)).toEqual(["carla@a.com"]);
+
+    tables.user_preferences = [{ user_id: 11, email_on_card_updated: false }];
+    await callerFor(1).cardDetails.addComment({ cardId: 1000, content: "@Carla de novo", mentions: [11] });
+    expect(tables.notifications).toHaveLength(2);
+    expect(mail.sent).toHaveLength(1);
+  });
+
+  it("atribuir um cartão avisa o novo responsável, nunca quem atribuiu a si mesmo", async () => {
+    await callerFor(1).cardDetails.updateAssignedTo({ cardId: 1000, userId: 11 });
+    expect((tables.notifications || []).map((n) => [n.user_id, n.type])).toEqual([[11, "card_assigned"]]);
+    await callerFor(1).cardDetails.updateAssignedTo({ cardId: 1000, userId: 1 });
+    expect(tables.notifications).toHaveLength(1);
+  });
+
+  it("link de acesso: administrador da empresa, conta ativa e com e-mail", async () => {
+    const result = await callerFor(2).admin.users.sendAccessLink({ id: 11 });
+    expect(result.emailSent).toBe(false);
+    expect(result.link).toContain("token-invite");
+    expect(tables.users.find((u) => u.id === 11).auth_id).toBe(authAdmin.accounts[0].id);
+
+    await expect(callerFor(2).admin.users.sendAccessLink({ id: 3 })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(callerFor(2).admin.users.sendAccessLink({ id: 1 })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    tables.users.find((u) => u.id === 11).disabled_at = new Date().toISOString();
+    await expect(callerFor(2).admin.users.sendAccessLink({ id: 11 })).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
 });
