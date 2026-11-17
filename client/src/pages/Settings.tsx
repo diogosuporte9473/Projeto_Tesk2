@@ -402,6 +402,7 @@ function ProfileSettings({ user }: { user: any }) {
 
 function NotificationSettings() {
   const { data: preferences, isLoading } = trpc.settings.getPreferences.useQuery(undefined);
+  const { data: emailStatus } = trpc.settings.emailStatus.useQuery(undefined);
   const updatePrefsMutation = trpc.settings.updatePreferences.useMutation();
   const { language } = useLanguage();
   const isEnglish = language === "en";
@@ -452,6 +453,18 @@ function NotificationSettings() {
           <h3 className="text-lg font-semibold text-foreground mb-4">
             {isEnglish ? "Notification Preferences" : "Preferências de Notificações"}
           </h3>
+          <p className="mb-4 text-sm text-muted-foreground">
+            {isEnglish
+              ? "In-app notifications are always on. Choose which ones also arrive by email."
+              : "Os avisos dentro do app chegam sempre. Escolha quais também chegam por e-mail."}
+          </p>
+          {emailStatus && !emailStatus.configured && (
+            <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-foreground">
+              {isEnglish
+                ? "Email delivery is not configured on the server yet. These preferences will apply once it is."
+                : "O envio de e-mails ainda não foi configurado no servidor. Estas preferências passam a valer quando for."}
+            </div>
+          )}
           <div className="space-y-4">
             <div className="flex items-center justify-between p-4 rounded-lg bg-muted border border-border">
               <div>
@@ -461,7 +474,7 @@ function NotificationSettings() {
                 <p className="text-sm text-muted-foreground">
                   {isEnglish
                     ? "Receive an email when a card is assigned to you"
-                    : "Receba email quando um cartão for atribuído a você"}
+                    : "Quando alguém atribuir um cartão a você"}
                 </p>
               </div>
               <Switch
@@ -473,10 +486,10 @@ function NotificationSettings() {
             <div className="flex items-center justify-between p-4 rounded-lg bg-muted border border-border">
               <div>
                 <p className="font-medium text-foreground">
-                  {isEnglish ? "Card Updated" : "Cartão Atualizado"}
+                  {isEnglish ? "Mentions and automations" : "Menções e automações"}
                 </p>
                 <p className="text-sm text-muted-foreground">
-                  {isEnglish ? "Receive an email when a card is updated" : "Receba email quando um cartão for atualizado"}
+                  {isEnglish ? "When someone @mentions you or an automation notifies you" : "Quando alguém mencionar você com @ ou uma automação avisar você"}
                 </p>
               </div>
               <Switch
@@ -491,12 +504,13 @@ function NotificationSettings() {
                   {isEnglish ? "Mirrored Card" : "Cartão Espelhado"}
                 </p>
                 <p className="text-sm text-muted-foreground">
-                  {isEnglish ? "Receive an email when a card is mirrored" : "Receba email quando um cartão for espelhado"}
+                  {isEnglish ? "Not sent by email yet" : "Ainda não é enviado por e-mail"}
                 </p>
               </div>
               <Switch
                 checked={emailOnMirroredCard}
                 onCheckedChange={setEmailOnMirroredCard}
+                disabled
               />
             </div>
 
@@ -506,7 +520,7 @@ function NotificationSettings() {
                   {isEnglish ? "Due Date" : "Data de Vencimento"}
                 </p>
                 <p className="text-sm text-muted-foreground">
-                  {isEnglish ? "Receive an alert when the due date is close" : "Receba alerta quando a data de vencimento estiver próxima"}
+                  {isEnglish ? "When a due-date automation (due soon / overdue) notifies you" : "Quando uma automação de prazo (vence em breve ou atrasado) avisar você"}
                 </p>
               </div>
               <Switch

@@ -16,6 +16,24 @@ export default function Home() {
   const [name, setName] = useState("");
   const [isSignUp, setIsSignUp] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
+  const [showReset, setShowReset] = useState(false);
+  const [resetEmail, setResetEmail] = useState("");
+  const resetMutation = trpc.auth.requestPasswordReset.useMutation();
+
+  const handleReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const result = await resetMutation.mutateAsync({ email: resetEmail.trim() });
+      if (!result.emailEnabled) {
+        toast.error("O envio de e-mails ainda não está configurado. Peça ao administrador um link de acesso.");
+        return;
+      }
+      toast.success("Se o e-mail estiver cadastrado, você receberá um link para definir a senha em instantes.", { duration: 8000 });
+      setShowReset(false);
+    } catch (error: any) {
+      toast.error(error?.message?.includes("email") ? "Informe um e-mail válido" : "Não foi possível enviar agora. Tente novamente.");
+    }
+  };
   const [, setLocation] = useLocation();
   const utils = trpc.useUtils();
 
@@ -119,6 +137,35 @@ export default function Home() {
                 {isSignUp ? t("home.authSubtitleSignup") : t("home.authSubtitleSignin")}
               </p>
 
+              {showReset ? (
+              <form onSubmit={handleReset} className="space-y-4">
+                <div className="space-y-1.5">
+                  <label htmlFor="reset-email" className="text-sm font-medium">E-mail da sua conta</label>
+                  <input
+                    id="reset-email"
+                    type="email"
+                    value={resetEmail}
+                    onChange={(e) => setResetEmail(e.target.value)}
+                    className={inputClass}
+                    placeholder="exemplo@email.com"
+                    autoComplete="email"
+                    required
+                  />
+                  <p className="text-xs text-[#a0aec0]">Enviaremos um link para você definir uma nova senha.</p>
+                </div>
+                <Button
+                  type="submit"
+                  disabled={resetMutation.isPending}
+                  className="w-full h-11 bg-[#00d9ff] hover:bg-[#33e1ff] text-[#0a0e27] font-bold shadow-[0_8px_30px_-8px_#00d9ff]"
+                >
+                  {resetMutation.isPending ? <Loader2 className="animate-spin mr-2" /> : null}
+                  Enviar link
+                </Button>
+                <button type="button" onClick={() => setShowReset(false)} className="w-full text-sm text-[#a0aec0] hover:text-white">
+                  Voltar para a entrada
+                </button>
+              </form>
+              ) : (
               <form onSubmit={handleAuth} className="space-y-4">
                 {isSignUp && (
                   <div className="space-y-1.5">
@@ -169,7 +216,20 @@ export default function Home() {
                   {authLoading ? <Loader2 className="animate-spin mr-2" /> : null}
                   {isSignUp ? t("home.signUp") : t("home.signIn")}
                 </Button>
+                {!isSignUp && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setResetEmail(username.includes("@") ? username : "");
+                      setShowReset(true);
+                    }}
+                    className="block w-full text-center text-sm text-[#a0aec0] hover:text-white"
+                  >
+                    Esqueci minha senha
+                  </button>
+                )}
               </form>
+              )}
 
               <div className="mt-6 text-center">
                 <button

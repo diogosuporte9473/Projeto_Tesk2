@@ -31,6 +31,7 @@ import {
   BarChart3,
   Check,
   ChevronsUpDown,
+  Download,
   Home,
   LogOut,
   Menu,
@@ -45,6 +46,7 @@ import {
   Users,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useInstallPrompt } from "@/hooks/useInstallPrompt";
 import { Link, useLocation } from "wouter";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useBranding } from "@/contexts/BrandingContext";
@@ -85,6 +87,7 @@ export default function TrelloDashboardLayout({ children }: TrelloDashboardLayou
   const { theme, toggleTheme } = useTheme();
   const [location, setLocation] = useLocation();
   const en = language === "en";
+  const installPrompt = useInstallPrompt();
 
   // Ativa sincronização global para a barra lateral (boards)
   useRealtimeSync();
@@ -391,6 +394,24 @@ export default function TrelloDashboardLayout({ children }: TrelloDashboardLayou
             <DropdownMenuItem onClick={() => setLocation("/settings")}>
               <Settings className="h-4 w-4" /> {t("layout.settings")}
             </DropdownMenuItem>
+            {(installPrompt.canInstall || installPrompt.iosInstructions) && (
+              <DropdownMenuItem
+                onClick={async () => {
+                  if (installPrompt.canInstall) {
+                    await installPrompt.install();
+                  } else {
+                    toast.info(
+                      en
+                        ? "On iPhone/iPad: tap Share, then “Add to Home Screen”."
+                        : "No iPhone/iPad: toque em Compartilhar e depois em “Adicionar à Tela de Início”.",
+                      { duration: 8000 }
+                    );
+                  }
+                }}
+              >
+                <Download className="h-4 w-4" /> {en ? "Install the app" : "Instalar o app"}
+              </DropdownMenuItem>
+            )}
             {toggleTheme && (
               <DropdownMenuItem onClick={toggleTheme}>
                 {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}

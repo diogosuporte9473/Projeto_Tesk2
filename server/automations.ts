@@ -12,6 +12,7 @@
  * quadro; escritas feitas aqui não disparam outras regras (sem cascata).
  */
 import { supabase } from "./_core/supabase.js";
+import { notifyUsers } from "./notify.js";
 import { getBoardTheme, validateFieldValue } from "../shared/boardThemes.js";
 import {
   SCHEDULED_TRIGGERS,
@@ -105,19 +106,18 @@ async function executeActions(rule: AutomationRow, ctx: BoardContext, row: any, 
         done.push("notificação sem destinatário");
         continue;
       }
-      const { error } = await supabase.from("notifications").insert(
-        recipients.map((userId) => ({
-          user_id: userId,
-          tenant_id: tenantId,
-          type: "card_updated",
-          related_card_id: row.id,
-          related_board_id: ctx.board.id,
-          title: rule.name.slice(0, 255),
-          message: `${snap.title}${action.message ? ` — ${action.message}` : ""}`,
-        }))
-      );
-      if (error) throw new Error(`notificar: ${error.message}`);
-      done.push(`${recipients.length} notificação(ões)`);
+      const triggerType = (rule as any).trigger?.type;
+      const { notified, emailed } = await notifyUsers({
+        userIds: recipients,
+        tenantId,
+        type: "card_updated",
+        cardId: row.id,
+        boardId: ctx.board.id,
+        title: rule.name,
+        message: `${snap.title}${action.message ? ` — ${action.message}` : ""}`,
+        emailPref: triggerType === "due_soon" || triggerType === "overdue" ? "email_on_due_date" : "email_on_card_updated",
+      });
+      done.push(`${notified} notificação(ões)${emailed ? `, ${emailed} e-mail(s)` : ""}`);
     }
 
     if (action.type === "set_field") {

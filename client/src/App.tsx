@@ -13,12 +13,14 @@ import Admin from "./pages/Admin";
 import MasterDashboard from "./pages/MasterDashboard";
 import Onboarding from "./pages/Onboarding";
 import Dashboard from "./pages/Dashboard";
+import AccessPage from "./pages/AccessPage";
 
 function Router() {
   return (
     <Switch>
       <Route path={"/"} component={Home} />
       <Route path={"/onboarding"} component={Onboarding} />
+      <Route path={"/acesso"} component={AccessPage} />
       <Route path={"/board/:id"} component={BoardView} />
       <Route path={"/dashboard"} component={Dashboard} />
       <Route path={"/settings"} component={Settings} />

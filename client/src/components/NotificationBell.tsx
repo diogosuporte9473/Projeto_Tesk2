@@ -6,7 +6,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 
-/** Sino de notificações (avisos gerados pelas automações dos quadros). */
+/** Sino de notificações (menções, atribuições e avisos das automações). */
 export default function NotificationBell({ compact }: { compact?: boolean }) {
   const utils = trpc.useUtils();
   const [, setLocation] = useLocation();
@@ -44,7 +44,7 @@ export default function NotificationBell({ compact }: { compact?: boolean }) {
               <button
                 key={item.id}
                 type="button"
-                onClick={() => item.boardId && setLocation(`/board/${item.boardId}`)}
+                onClick={() => item.boardId && setLocation(`/board/${item.boardId}${item.cardId ? `?card=${item.cardId}` : ""}`)}
                 className="flex w-full gap-2 border-b border-border px-3 py-2.5 text-left last:border-b-0 hover:bg-foreground/[0.04]"
               >
                 <span className={cn("mt-1.5 h-2 w-2 flex-shrink-0 rounded-full", item.read ? "bg-transparent" : "bg-primary")} />
